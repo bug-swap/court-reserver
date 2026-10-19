@@ -18,7 +18,7 @@
     .summary{background:#f1f6f0;border:1px solid #d7e8d9;border-radius:12px;padding:14px 16px;margin:22px 0;color:#254b31}
     button{border:0;border-radius:11px;background:#17633d;color:#fff;font:700 1rem system-ui;padding:14px 22px;cursor:pointer}
     button:hover{background:#0f4e2d}.actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-    a{color:#17633d}footer{margin-top:22px;font-size:.88rem;color:#68675f}#message{margin-top:16px;color:#9a361e}
+    a{color:#17633d}footer{margin-top:22px;font-size:.88rem;color:#68675f}#message{margin-top:16px;color:#254b31}#message.error{color:#9a361e}
     #room-field[hidden]{display:none}@media(max-width:560px){.grid{grid-template-columns:1fr;gap:0}.card{padding:22px}}
   </style>
 </head>
@@ -47,7 +47,7 @@
         </div>
         <p class="hint">Times use the Recreation Center’s Mountain time zone. EMS limits each court booking to 60 minutes.</p>
         <div class="summary" id="summary" aria-live="polite"></div>
-        <div class="actions"><button type="submit">Save settings on GitHub</button><a id="actions-link" href="#">View automation runs</a></div>
+        <div class="actions"><button type="submit">Open GitHub issue to save</button><a id="actions-link" href="#">View automation runs</a></div>
         <p id="message" role="alert"></p>
       </form>
     </section>
@@ -84,13 +84,14 @@
     }).catch(() => refresh());
     if (repository) document.querySelector('#actions-link').href = `https://github.com/${repository}/actions/workflows/reserve.yml`;
     form.addEventListener('submit', event => {
-      event.preventDefault(); message.textContent = '';
-      if (!refresh()) { message.textContent = 'The time must end before midnight.'; return; }
-      if (!repository) { message.textContent = 'Open this page from its GitHub Pages address to save settings.'; return; }
+      event.preventDefault(); message.textContent = ''; message.classList.remove('error');
+      if (!refresh()) { message.classList.add('error'); message.textContent = 'The time must end before midnight.'; return; }
+      if (!repository) { message.classList.add('error'); message.textContent = 'Open this page from its GitHub Pages address to save settings.'; return; }
       const settings = { sport: sport.value, startTime: start.value, badmintonRoom: room.value };
       const body = `Please apply these court reservation settings.\n\n\`\`\`json\n${JSON.stringify(settings, null, 2)}\n\`\`\``;
       const query = new URLSearchParams({ title: 'Court reservation settings', body });
-      location.href = `https://github.com/${repository}/issues/new?${query}`;
+      window.open(`https://github.com/${repository}/issues/new?${query}`, '_blank', 'noopener,noreferrer');
+      message.textContent = 'Submit the prefilled issue in the new tab to save these settings.';
     });
     refresh();
   </script>
