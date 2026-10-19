@@ -1,5 +1,25 @@
 import { COURT_URL, EMS_URL, emsTime, endTime } from './config.mjs';
 
+export function courtCandidates(sport, badmintonRoom) {
+  if (sport === 'squash') {
+    return [
+      { sport: 'squash', room: null, name: 'Squash Court' },
+      ...['3C', '3A', '3B'].map(room => ({
+        sport: 'badminton',
+        room,
+        name: `Badminton_Pickleball ${room}`
+      }))
+    ];
+  }
+
+  const rooms = badmintonRoom === 'any' ? ['3A', '3B', '3C'] : [badmintonRoom];
+  return rooms.map(room => ({
+    sport: 'badminton',
+    room,
+    name: `Badminton_Pickleball ${room}`
+  }));
+}
+
 async function firstVisible(candidates, description) {
   for (const locator of candidates) {
     const first = locator.first();
@@ -90,24 +110,27 @@ async function chooseDateAndTime(page, date, startTime) {
 
 async function selectCourt(page, sport, badmintonRoom) {
   await page.getByText('Rooms You Can Reserve').first().waitFor({ state: 'visible', timeout: 30000 });
-  const roomNames = sport === 'squash'
-    ? ['Squash Court']
-    : badmintonRoom === 'any'
-      ? ['Badminton_Pickleball 3A', 'Badminton_Pickleball 3B', 'Badminton_Pickleball 3C']
-      : [`Badminton_Pickleball ${badmintonRoom}`];
-  let add;
-  for (const roomName of roomNames) {
+  let selected;
+  for (const court of courtCandidates(sport, badmintonRoom)) {
     const candidates = [
-      page.locator(`[aria-label*="Add Room to Cart"][aria-label*="${roomName}"], [title*="Add Room to Cart"][title*="${roomName}"]`),
-      page.getByText(roomName, { exact: true }).locator('xpath=..').locator('[aria-label*="Add Room to Cart"], [title*="Add Room to Cart"]')
+      page.locator(`[aria-label*="Add Room to Cart"][aria-label*="${court.name}"], [title*="Add Room to Cart"][title*="${court.name}"]`),
+      page.getByText(court.name, { exact: true }).locator('xpath=..').locator('[aria-label*="Add Room to Cart"], [title*="Add Room to Cart"]')
     ];
     for (const candidate of candidates) {
-      if (await candidate.first().isVisible().catch(() => false)) { add = candidate.first(); break; }
+      if (await candidate.first().isVisible().catch(() => false)) {
+        selected = court;
+        await candidate.first().click();
+        break;
+      }
     }
-    if (add) break;
+    if (selected) break;
   }
-  if (!add) throw new Error(`No selectable ${sport} court found for the requested hour`);
-  await add.click();
+  if (!selected) {
+    const fallback = sport === 'squash'
+      ? 'Squash is unavailable and badminton courts 3C, 3A, and 3B are also unavailable'
+      : `No selectable badminton court found${badmintonRoom === 'any' ? ' (tried 3A, 3B, 3C)' : ` for court ${badmintonRoom}`}`;
+    throw new Error(`${fallback} for the requested hour`);
+  }
   await page.waitForFunction(() => {
     const cart = document.querySelector('#cart-header-container');
     return /My Cart\s*\(\s*1\s*\)/i.test(cart?.textContent || '');
@@ -116,6 +139,7 @@ async function selectCourt(page, sport, badmintonRoom) {
     page.getByRole('button', { name: /next step/i }),
     page.getByRole('link', { name: /next step/i })
   ], 'Next Step button')).click();
+  return selected;
 }
 
 async function fillDetails(page, contact) {
@@ -149,16 +173,28 @@ export async function keepAlive(page) {
 export async function bookCourt(page, { date, startTime, sport, badmintonRoom, contact, dryRun = false }) {
   await keepAlive(page);
   await chooseDateAndTime(page, date, startTime);
-  await selectCourt(page, sport, badmintonRoom);
+  const selectedCourt = await selectCourt(page, sport, badmintonRoom);
   if (!dryRun) await fillDetails(page, contact);
   const create = await firstVisible([
     page.getByRole('button', { name: /create reservation/i }),
     page.getByRole('link', { name: /create reservation/i })
   ], 'Create Reservation button');
-  if (dryRun) return { submitted: false, pageText: (await page.locator('body').innerText()).slice(-3000) };
+  if (dryRun) {
+    return {
+      submitted: false,
+      sport: selectedCourt.sport,
+      badmintonRoom: selectedCourt.room || badmintonRoom,
+      pageText: (await page.locator('body').innerText()).slice(-3000)
+    };
+  }
   await create.click();
   await page.getByText(/reservation (created|confirmed|submitted)|confirmation number/i).first()
     .waitFor({ state: 'visible', timeout: 30000 });
   const confirmation = (await page.locator('body').innerText()).slice(-1500);
-  return { submitted: true, confirmation };
+  return {
+    submitted: true,
+    sport: selectedCourt.sport,
+    badmintonRoom: selectedCourt.room || badmintonRoom,
+    confirmation
+  };
 }

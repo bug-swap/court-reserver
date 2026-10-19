@@ -1,6 +1,6 @@
 # CU Court Reserver
 
-GitHub Actions requests a CU Recreation Center court in EMS each day shortly after midnight Denver time, for the next day's one-hour slot. The default is squash from 6–7 PM. If the date is still unbooked, early-morning and four-hourly runs retry it; after a confirmation, those runs only refresh the session. A booking confirmation or failure sends email.
+GitHub Actions requests a CU Recreation Center court in EMS each day shortly after midnight Denver time, for the next day's one-hour slot. The default is squash from 6–7 PM. If squash is unavailable, it tries badminton courts 3C, 3A, then 3B, booking only the first available court. If no court is available, the failure email alerts the configured contact. If the date is still unbooked, early-morning and four-hourly runs retry it; after a confirmation, those runs only refresh the session. A booking confirmation or failure sends email.
 
 The public [GitHub Pages settings form](https://dracula-101.github.io/court-reserver/) chooses squash or badminton, the start time, and optionally badminton court 3A, 3B, or 3C. The form saves `site/config.json` with a fine-grained GitHub token. The next Actions run copies those settings into Supabase and uses them for booking. The token is cleared after saving; it is never committed or stored by the page.
 

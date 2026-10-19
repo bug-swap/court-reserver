@@ -50,12 +50,20 @@ try {
   } else {
     result = await bookCourt(page, { date, startTime, sport, badmintonRoom, contact, dryRun: mode === 'dry-run' });
     if (result.submitted) {
-      await saveBooking({ date, sport, startTime, badmintonRoom, confirmation: result.confirmation });
+      await saveBooking({
+        date,
+        sport: result.sport,
+        startTime,
+        badmintonRoom: result.badmintonRoom,
+        confirmation: result.confirmation
+      });
       outcome = 'confirmed';
-      console.log(`Confirmed ${sport} for ${date} at ${startTime} Mountain time`);
+      const bookedCourt = result.sport === 'badminton' ? `badminton court ${result.badmintonRoom}` : 'squash';
+      console.log(`Confirmed ${bookedCourt} for ${date} at ${startTime} Mountain time`);
     } else {
       outcome = 'dry_run';
-      console.log('Dry run reached the final confirmation step.');
+      const selectedCourt = result.sport === 'badminton' ? `badminton court ${result.badmintonRoom}` : 'squash';
+      console.log(`Dry run reached the final confirmation step with ${selectedCourt}.`);
     }
   }
 } catch (caught) {
@@ -85,9 +93,9 @@ try {
 
 if (mode === 'book') {
   const body = error
-    ? `CU court reservation failed for ${date} at ${startTime} Mountain time. Check the GitHub Actions run and renew the EMS session if needed. Error: ${error.message}`
+    ? `CU court reservation could not be completed for ${date} at ${startTime} Mountain time. Check the GitHub Actions run for details. Error: ${error.message}`
     : result?.submitted
-      ? `CU ${sport} court reservation confirmed for ${date}, ${startTime}–${endTime(startTime)} Mountain time.\n\n${result.confirmation}`
+      ? `CU ${result.sport === 'badminton' ? `badminton court ${result.badmintonRoom}` : 'squash'} reservation confirmed for ${date}, ${startTime}–${endTime(startTime)} Mountain time.\n\n${result.confirmation}`
       : `CU court reservation for ${date} was already recorded. No duplicate was submitted.`;
   if (!mail) {
     console.error('Booking email unavailable: GMAIL_USER and GMAIL_APP_PASSWORD are required');
