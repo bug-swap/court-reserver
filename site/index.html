@@ -3,24 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
   <title>CU Court Reserver</title>
-  <style>
-    :root{font:16px/1.5 system-ui,-apple-system,sans-serif;color:#25251f;background:#f7f5f0}
-    *{box-sizing:border-box}body{margin:0;padding:32px 20px 72px}main{max-width:760px;margin:5vh auto}
-    header{margin-bottom:26px}h1{font-size:clamp(2.2rem,5vw,3.4rem);line-height:1.08;letter-spacing:-.04em;margin:12px 0}
-    h2{font-size:1.2rem;margin:0 0 18px}p{margin:0 0 14px;color:#5b5a52}
-    .eyebrow{text-transform:uppercase;letter-spacing:.15em;font-size:.75rem;font-weight:800;color:#6a5c31}
-    .card{background:#fff;border:1px solid #e5e1d6;border-radius:20px;padding:28px;box-shadow:0 16px 40px #3333220a}
-    .field{margin:20px 0}.field>label,.field>span{display:block;font-weight:700;margin-bottom:8px}
-    select,input[type=time],input[type=text]{width:100%;min-height:48px;padding:10px 13px;border:1px solid #bdb8a9;border-radius:10px;background:#fff;color:#25251f;font:inherit}
-    select:focus,input:focus,button:focus{outline:3px solid #b4d4c0;outline-offset:2px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.hint{font-size:.88rem;margin-top:7px;color:#69675f}
-    .summary{background:#f1f6f0;border:1px solid #d7e8d9;border-radius:12px;padding:14px 16px;margin:22px 0;color:#254b31}
-    button{border:0;border-radius:11px;background:#17633d;color:#fff;font:700 1rem system-ui;padding:14px 22px;cursor:pointer}
-    button:hover{background:#0f4e2d}.actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-    a{color:#17633d}footer{margin-top:22px;font-size:.88rem;color:#68675f}#message{margin-top:16px;color:#254b31}#message.error{color:#9a361e}
-    #room-field[hidden]{display:none}@media(max-width:560px){.grid{grid-template-columns:1fr;gap:0}.card{padding:22px}}
-  </style>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <main>
@@ -47,53 +32,17 @@
         </div>
         <p class="hint">Times use the Recreation Center’s Mountain time zone. EMS limits each court booking to 60 minutes.</p>
         <div class="summary" id="summary" aria-live="polite"></div>
-        <div class="actions"><button type="submit">Open GitHub issue to save</button><a id="actions-link" href="#">View automation runs</a></div>
-        <p id="message" role="alert"></p>
+        <div class="field">
+          <label for="github-token">GitHub access token</label>
+          <input id="github-token" name="githubToken" type="password" autocomplete="off" spellcheck="false" required>
+          <p class="hint">Use a fine-grained token for only <strong>Dracula-101/court-reserver</strong> with <strong>Contents: Read and write</strong>. The token is sent only to GitHub and cleared after saving. <a href="https://github.com/settings/personal-access-tokens/new?name=CU%20Court%20Settings&amp;target_name=Dracula-101&amp;contents=write&amp;expires_in=30" target="_blank" rel="noopener noreferrer">Create a token</a>.</p>
+        </div>
+        <div class="actions"><button id="save-button" type="submit">Save settings</button><a id="actions-link" href="https://github.com/Dracula-101/court-reserver/actions/workflows/reserve.yml">View automation runs</a></div>
+        <p id="message" role="status" aria-live="polite"></p>
       </form>
     </section>
-    <footer>Saving opens a prefilled GitHub issue. Review it and press <strong>Submit new issue</strong>; a GitHub Action applies the settings. Only the repository owner’s requests are accepted. The page never asks for a password or access token. <a href="https://ems.colorado.edu/">Open CU EMS</a>.</footer>
+    <footer>Save updates this repository’s settings file. The token stays only in this tab until the request finishes; it is never stored by the page. The booking runs through GitHub Actions. <a href="https://ems.colorado.edu/">Open CU EMS</a>.</footer>
   </main>
-  <script>
-    const form = document.querySelector('#settings-form');
-    const sport = document.querySelector('#sport');
-    const room = document.querySelector('#badminton-room');
-    const start = document.querySelector('#start-time');
-    const end = document.querySelector('#end-time');
-    const summary = document.querySelector('#summary');
-    const message = document.querySelector('#message');
-    const roomField = document.querySelector('#room-field');
-    const owner = location.hostname.endsWith('.github.io') ? location.hostname.split('.')[0] : '';
-    const repoName = location.pathname.split('/').filter(Boolean)[0] || `${owner}.github.io`;
-    const repository = owner ? `${owner}/${repoName}` : '';
-    const timeLabel = value => {
-      const [hour, minute] = value.split(':').map(Number);
-      return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
-    };
-    function refresh() {
-      roomField.hidden = sport.value !== 'badminton';
-      const [hour, minute] = start.value.split(':').map(Number);
-      const valid = Number.isInteger(hour) && Number.isInteger(minute) && hour < 23;
-      end.value = valid ? timeLabel(`${String(hour + 1).padStart(2, '0')}:${String(minute).padStart(2, '0')}`) : 'Choose an earlier start';
-      const court = sport.value === 'squash' ? 'Squash Court' : room.value === 'any' ? 'any available badminton court' : `Badminton court ${room.value}`;
-      summary.textContent = valid ? `Every day: request ${court} for tomorrow, ${timeLabel(start.value)}–${end.value} Mountain time.` : 'Choose a start time that leaves one full hour before midnight.';
-      return valid;
-    }
-    for (const control of [sport, room, start]) control.addEventListener('change', refresh);
-    fetch('./config.json', { cache: 'no-store' }).then(response => response.json()).then(settings => {
-      sport.value = settings.sport || 'squash'; room.value = settings.badmintonRoom || 'any'; start.value = settings.startTime || '18:00'; refresh();
-    }).catch(() => refresh());
-    if (repository) document.querySelector('#actions-link').href = `https://github.com/${repository}/actions/workflows/reserve.yml`;
-    form.addEventListener('submit', event => {
-      event.preventDefault(); message.textContent = ''; message.classList.remove('error');
-      if (!refresh()) { message.classList.add('error'); message.textContent = 'The time must end before midnight.'; return; }
-      if (!repository) { message.classList.add('error'); message.textContent = 'Open this page from its GitHub Pages address to save settings.'; return; }
-      const settings = { sport: sport.value, startTime: start.value, badmintonRoom: room.value };
-      const body = `Please apply these court reservation settings.\n\n\`\`\`json\n${JSON.stringify(settings, null, 2)}\n\`\`\``;
-      const query = new URLSearchParams({ title: 'Court reservation settings', body });
-      window.open(`https://github.com/${repository}/issues/new?${query}`, '_blank', 'noopener,noreferrer');
-      message.textContent = 'Submit the prefilled issue in the new tab to save these settings.';
-    });
-    refresh();
-  </script>
+  <script src="./app.js" defer></script>
 </body>
 </html>
