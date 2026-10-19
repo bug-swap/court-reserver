@@ -36,8 +36,6 @@ jobs:
       CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
       GMAIL_USER: ${{ secrets.GMAIL_USER }}
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-      SPORT: ${{ vars.SPORT || 'squash' }}
-      START_TIME: ${{ vars.START_TIME || '18:00' }}
       MODE: ${{ github.event.inputs.mode || 'auto' }}
     steps:
       - uses: actions/checkout@v4

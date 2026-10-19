@@ -11,8 +11,9 @@ const page = await context.newPage();
 await page.goto(EMS_URL);
 console.log('Sign in to CU EMS in this window. Once “CREATE A RESERVATION” appears, press Enter here.');
 await new Promise(resolve => process.stdin.once('data', resolve));
-await page.goto(EMS_URL);
-if (!await page.getByText(/CREATE A RESERVATION/i).isVisible().catch(() => false)) {
+if (new URL(page.url()).origin !== new URL(EMS_URL).origin ||
+    await page.getByRole('button', { name: /^sign in$/i }).isVisible().catch(() => false) ||
+    await page.locator('a[href*="BrowseReservations.aspx"]').count() === 0) {
   throw new Error('EMS does not appear signed in. No session was saved.');
 }
 const encrypted = encryptState({ browserState: await context.storageState(), bookedDates: [] });

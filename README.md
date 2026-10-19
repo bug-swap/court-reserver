@@ -1,8 +1,8 @@
 # CU Court Reserver
 
-This project uses Playwright and GitHub Actions to request a CU Recreation Center court in EMS. The default request is **squash, 6–7 PM Mountain time, two calendar days ahead**. Repository variables `SPORT=badminton` and `START_TIME=06:00` change those defaults. Scheduled attempts start at 12:07 and 12:17 AM Denver time; the second run skips dates already recorded as booked. A separate scheduled run visits EMS every four hours. A successful reservation or a booking failure sends an email.
+This project uses Playwright and GitHub Actions to request a CU Recreation Center court in EMS. The default request is **squash, 6–7 PM Mountain time, one calendar day ahead**. The EMS court template currently allows bookings only one day ahead. Scheduled attempts start at 12:07 and 12:17 AM Denver time; later backup attempts may also run. Each run skips a date already recorded as booked. A separate scheduled run visits EMS every four hours. A successful reservation or a booking failure sends an email.
 
-GitHub Pages hosts only the informational page in `site/`. GitHub Actions runs the automation. No login session or contact information is stored in the site or committed to the repository.
+GitHub Pages hosts the settings form in `site/`. Choose squash or badminton, a one-hour start time, and optionally badminton court 3A, 3B, or 3C. Saving opens a prefilled GitHub issue. After the repository owner submits it, `configure.yml` validates the choices, updates `site/config.json`, and republishes the page. GitHub Actions runs the booking. No login session or contact information is stored in the site or committed to the repository.
 
 ## Initial setup
 
@@ -22,11 +22,11 @@ GitHub Pages hosts only the informational page in `site/`. GitHub Actions runs t
    | `GMAIL_APP_PASSWORD` | Gmail app password for that account |
 
    Examples: `gh secret set STATE_KEY < state-key.txt` and `gh secret set EMS_INITIAL_STATE < initial-state.txt`. Enter the other secret values using `gh secret set NAME` so they do not appear in shell history.
-5. Push the `main` branch. Run **Reserve CU court** manually with `dry-run` to check the EMS form without submitting a reservation. If that succeeds, the scheduled booking and session refreshes are ready.
+5. Push the `main` branch. Leave repository Issues enabled so the Pages form can submit settings. Run **Reserve CU court** manually with `dry-run` to check the EMS form without submitting a reservation. If that succeeds, the scheduled booking and session refreshes are ready.
 
 The workflow retains the latest browser session as an AES-256-GCM encrypted GitHub Actions artifact. Only the `STATE_KEY` secret decrypts it. The initial secret is used if no recent artifact exists. GitHub Actions schedules can be delayed, and CU or Microsoft may expire a session even when it is visited regularly. When that happens, run `npm run login` again, update both `STATE_KEY` and `EMS_INITIAL_STATE`, then delete the expired `ems-session` artifact or let it expire. A stale artifact takes precedence over the initial secret.
 
-GitHub may disable scheduled workflows in an inactive public repository. Check the Actions page periodically. The page itself cannot execute bookings.
+GitHub may disable scheduled workflows in an inactive public repository. Check the Actions page periodically. The page itself cannot execute bookings; its settings are applied through the owner-only issue workflow.
 
 ## Local checks
 

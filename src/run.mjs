@@ -3,15 +3,17 @@ import { readFile, writeFile } from 'node:fs/promises';
 import nodemailer from 'nodemailer';
 import { bookCourt, keepAlive } from './booking.mjs';
 import { decryptState, encryptState } from './crypto.mjs';
-import { modeForSchedule, requestedSport, requestedTime, targetDate } from './config.mjs';
+import { endTime, modeForSchedule, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
 
 const mode = process.env.MODE === 'auto' || !process.env.MODE ? modeForSchedule() : process.env.MODE;
 if (!['book', 'keepalive', 'dry-run'].includes(mode)) throw new Error('MODE must be auto, book, keepalive, or dry-run');
 const encrypted = await readFile('session.enc', 'utf8').catch(async () => await readFile('initial-state.txt', 'utf8'));
 const state = decryptState(encrypted);
 const date = targetDate();
-const sport = requestedSport(process.env.SPORT);
-const startTime = requestedTime(process.env.START_TIME);
+const settings = JSON.parse(await readFile('site/config.json', 'utf8'));
+const sport = requestedSport(process.env.SPORT || settings.sport);
+const startTime = requestedTime(process.env.START_TIME || settings.startTime);
+const badmintonRoom = requestedRoom(process.env.BADMINTON_ROOM || settings.badmintonRoom);
 const contact = {
   name: process.env.CONTACT_NAME,
   phone: process.env.CONTACT_PHONE,
@@ -37,7 +39,7 @@ try {
   } else if (mode === 'book' && state.bookedDates?.includes(date)) {
     console.log(`Already booked ${date}; skipping`);
   } else {
-    result = await bookCourt(page, { date, startTime, sport, contact, dryRun: mode === 'dry-run' });
+    result = await bookCourt(page, { date, startTime, sport, badmintonRoom, contact, dryRun: mode === 'dry-run' });
     if (result.submitted) {
       state.bookedDates = [...new Set([...(state.bookedDates || []), date])].slice(-90);
       console.log(`Confirmed ${sport} for ${date} at ${startTime} Mountain time`);
@@ -57,7 +59,7 @@ if (mode === 'book') {
   const body = error
     ? `CU court reservation failed for ${date} at ${startTime} Mountain time. Check the GitHub Actions run and renew the EMS session if needed. Error: ${error.message}`
     : result?.submitted
-      ? `CU ${sport} court reservation confirmed for ${date}, ${startTime}–${startTime === '06:00' ? '07:00' : '19:00'} Mountain time.\n\n${result.confirmation}`
+      ? `CU ${sport} court reservation confirmed for ${date}, ${startTime}–${endTime(startTime)} Mountain time.\n\n${result.confirmation}`
       : `CU court reservation for ${date} was already recorded. No duplicate was submitted.`;
   await mail.sendMail({
     from: process.env.GMAIL_USER,

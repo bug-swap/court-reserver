@@ -5,22 +5,94 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>CU Court Reserver</title>
   <style>
-    :root{color-scheme:light;font:16px/1.55 system-ui,sans-serif;background:#f7f5ef;color:#212121}
-    body{max-width:680px;margin:8vh auto;padding:0 24px}
-    h1{font-size:2.3rem;line-height:1.1;margin-bottom:.4em}
-    .card{background:white;border:1px solid #ded9cc;border-radius:16px;padding:28px;box-shadow:0 10px 30px #0000000a}
-    .tag{display:inline-block;padding:4px 10px;background:#e8f2ea;color:#285f38;border-radius:99px;font-size:.85rem;font-weight:650}
-    a{color:#17623b} small{color:#666}
+    :root{font:16px/1.5 system-ui,-apple-system,sans-serif;color:#25251f;background:#f7f5f0}
+    *{box-sizing:border-box}body{margin:0;padding:32px 20px 72px}main{max-width:760px;margin:5vh auto}
+    header{margin-bottom:26px}h1{font-size:clamp(2.2rem,5vw,3.4rem);line-height:1.08;letter-spacing:-.04em;margin:12px 0}
+    h2{font-size:1.2rem;margin:0 0 18px}p{margin:0 0 14px;color:#5b5a52}
+    .eyebrow{text-transform:uppercase;letter-spacing:.15em;font-size:.75rem;font-weight:800;color:#6a5c31}
+    .card{background:#fff;border:1px solid #e5e1d6;border-radius:20px;padding:28px;box-shadow:0 16px 40px #3333220a}
+    .field{margin:20px 0}.field>label,.field>span{display:block;font-weight:700;margin-bottom:8px}
+    select,input[type=time],input[type=text]{width:100%;min-height:48px;padding:10px 13px;border:1px solid #bdb8a9;border-radius:10px;background:#fff;color:#25251f;font:inherit}
+    select:focus,input:focus,button:focus{outline:3px solid #b4d4c0;outline-offset:2px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.hint{font-size:.88rem;margin-top:7px;color:#69675f}
+    .summary{background:#f1f6f0;border:1px solid #d7e8d9;border-radius:12px;padding:14px 16px;margin:22px 0;color:#254b31}
+    button{border:0;border-radius:11px;background:#17633d;color:#fff;font:700 1rem system-ui;padding:14px 22px;cursor:pointer}
+    button:hover{background:#0f4e2d}.actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+    a{color:#17633d}footer{margin-top:22px;font-size:.88rem;color:#68675f}#message{margin-top:16px;color:#9a361e}
+    #room-field[hidden]{display:none}@media(max-width:560px){.grid{grid-template-columns:1fr;gap:0}.card{padding:22px}}
   </style>
 </head>
 <body>
-  <main class="card">
-    <span class="tag">GitHub Actions automation</span>
-    <h1>CU Court Reserver</h1>
-    <p>This project schedules an EMS court reservation for two days ahead at 6–7 PM Mountain time. Squash is the default sport; badminton can be selected in repository variables.</p>
-    <p>The booking runs after midnight in Denver. A separate scheduled visit refreshes the EMS session. Confirmation and failure notices are sent by email.</p>
-    <p><a href="https://ems.colorado.edu/">Open CU EMS</a></p>
-    <small>The schedule and session are maintained by GitHub Actions. This page does not hold login or contact details.</small>
+  <main>
+    <header>
+      <div class="eyebrow">CU Recreation Center</div>
+      <h1>Court reservation settings</h1>
+      <p>Choose the court and one-hour time slot for the daily reservation. The automation requests tomorrow’s slot shortly after midnight, Mountain time.</p>
+    </header>
+    <section class="card" aria-labelledby="settings-heading">
+      <h2 id="settings-heading">Daily booking</h2>
+      <form id="settings-form">
+        <div class="field"><label for="sport">Sport</label><select id="sport" name="sport"><option value="squash">Squash</option><option value="badminton">Badminton</option></select></div>
+        <div class="field" id="room-field" hidden>
+          <label for="badminton-room">Badminton court</label>
+          <select id="badminton-room" name="badmintonRoom">
+            <option value="any">Any available: 3A, then 3B, then 3C</option>
+            <option value="3A">3A only</option><option value="3B">3B only</option><option value="3C">3C only</option>
+          </select>
+          <p class="hint">A selected court is required. The automation reports a failure if it is unavailable.</p>
+        </div>
+        <div class="grid">
+          <div class="field"><label for="start-time">Start time</label><input id="start-time" name="startTime" type="time" required value="18:00"></div>
+          <div class="field"><span>End time</span><input id="end-time" type="text" value="7:00 PM" readonly aria-label="End time"></div>
+        </div>
+        <p class="hint">Times use the Recreation Center’s Mountain time zone. EMS limits each court booking to 60 minutes.</p>
+        <div class="summary" id="summary" aria-live="polite"></div>
+        <div class="actions"><button type="submit">Save settings on GitHub</button><a id="actions-link" href="#">View automation runs</a></div>
+        <p id="message" role="alert"></p>
+      </form>
+    </section>
+    <footer>Saving opens a prefilled GitHub issue. Review it and press <strong>Submit new issue</strong>; a GitHub Action applies the settings. Only the repository owner’s requests are accepted. The page never asks for a password or access token. <a href="https://ems.colorado.edu/">Open CU EMS</a>.</footer>
   </main>
+  <script>
+    const form = document.querySelector('#settings-form');
+    const sport = document.querySelector('#sport');
+    const room = document.querySelector('#badminton-room');
+    const start = document.querySelector('#start-time');
+    const end = document.querySelector('#end-time');
+    const summary = document.querySelector('#summary');
+    const message = document.querySelector('#message');
+    const roomField = document.querySelector('#room-field');
+    const owner = location.hostname.endsWith('.github.io') ? location.hostname.split('.')[0] : '';
+    const repoName = location.pathname.split('/').filter(Boolean)[0] || `${owner}.github.io`;
+    const repository = owner ? `${owner}/${repoName}` : '';
+    const timeLabel = value => {
+      const [hour, minute] = value.split(':').map(Number);
+      return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
+    };
+    function refresh() {
+      roomField.hidden = sport.value !== 'badminton';
+      const [hour, minute] = start.value.split(':').map(Number);
+      const valid = Number.isInteger(hour) && Number.isInteger(minute) && hour < 23;
+      end.value = valid ? timeLabel(`${String(hour + 1).padStart(2, '0')}:${String(minute).padStart(2, '0')}`) : 'Choose an earlier start';
+      const court = sport.value === 'squash' ? 'Squash Court' : room.value === 'any' ? 'any available badminton court' : `Badminton court ${room.value}`;
+      summary.textContent = valid ? `Every day: request ${court} for tomorrow, ${timeLabel(start.value)}–${end.value} Mountain time.` : 'Choose a start time that leaves one full hour before midnight.';
+      return valid;
+    }
+    for (const control of [sport, room, start]) control.addEventListener('change', refresh);
+    fetch('./config.json', { cache: 'no-store' }).then(response => response.json()).then(settings => {
+      sport.value = settings.sport || 'squash'; room.value = settings.badmintonRoom || 'any'; start.value = settings.startTime || '18:00'; refresh();
+    }).catch(() => refresh());
+    if (repository) document.querySelector('#actions-link').href = `https://github.com/${repository}/actions/workflows/reserve.yml`;
+    form.addEventListener('submit', event => {
+      event.preventDefault(); message.textContent = '';
+      if (!refresh()) { message.textContent = 'The time must end before midnight.'; return; }
+      if (!repository) { message.textContent = 'Open this page from its GitHub Pages address to save settings.'; return; }
+      const settings = { sport: sport.value, startTime: start.value, badmintonRoom: room.value };
+      const body = `Please apply these court reservation settings.\n\n\`\`\`json\n${JSON.stringify(settings, null, 2)}\n\`\`\``;
+      const query = new URLSearchParams({ title: 'Court reservation settings', body });
+      location.href = `https://github.com/${repository}/issues/new?${query}`;
+    });
+    refresh();
+  </script>
 </body>
 </html>

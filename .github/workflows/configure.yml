@@ -1,0 +1,41 @@
+name: Apply court settings
+
+on:
+  issues:
+    types: [opened]
+
+concurrency:
+  group: court-settings
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: read
+  actions: write
+
+jobs:
+  configure:
+    if: github.event.issue.user.login == github.repository_owner && github.event.issue.title == 'Court reservation settings'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate settings from owner issue
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: node src/apply-settings.mjs
+      - name: Commit settings
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add site/config.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Update court reservation settings'
+            git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          fi
+      - name: Republish settings page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml
