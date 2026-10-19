@@ -102,13 +102,15 @@ async function fillDetails(page, contact) {
 
 export async function checkSignedIn(page) {
   await page.goto(EMS_URL, { waitUntil: 'domcontentloaded' });
-  await page.locator('a[href*="BrowseReservations.aspx"]').first()
-    .waitFor({ state: 'attached', timeout: 10000 }).catch(() => {});
+  const reservationLinks = page.locator('a[href*="BrowseReservations.aspx"], a[href*="RoomRequest.aspx"]');
+  await reservationLinks.first().waitFor({ state: 'attached', timeout: 15000 }).catch(() => {});
+  const location = new URL(page.url());
+  const safeLocation = `${location.hostname}${location.pathname}`;
   if (await page.getByRole('button', { name: /^sign in$/i }).isVisible().catch(() => false)) {
-    throw new Error('EMS session expired. Run npm run login again and update EMS_INITIAL_STATE.');
+    throw new Error(`EMS session requires sign-in at ${safeLocation}. Run npm run login again.`);
   }
-  if (await page.locator('a[href*="BrowseReservations.aspx"]').count() === 0) {
-    throw new Error('EMS signed-in home page could not be verified.');
+  if (await reservationLinks.count() === 0) {
+    throw new Error(`EMS signed-in home page could not be verified at ${safeLocation}.`);
   }
 }
 
