@@ -1,0 +1,9 @@
+node_modules/
+.env
+*.enc
+*.zip
+initial-state.txt
+playwright-report/
+test-results/
+screenshots/
+failure.png
