@@ -44,9 +44,9 @@ try {
     await keepAlive(page);
     outcome = 'session_active';
     console.log('EMS session active');
-  } else if (mode === 'book' && (await hasBooking(date) || state.bookedDates?.includes(date))) {
+  } else if (mode !== 'keepalive' && (await hasBooking(date) || state.bookedDates?.includes(date))) {
     outcome = 'already_booked';
-    console.log(`Already booked ${date}; skipping`);
+    console.log(`Already booked ${date}; skipping court selection`);
   } else {
     result = await bookCourt(page, { date, startTime, sport, badmintonRoom, contact, dryRun: mode === 'dry-run' });
     if (result.submitted) {

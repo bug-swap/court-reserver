@@ -31,6 +31,6 @@ The workflow runs Chromium headed under Xvfb because EMS returns an error page t
 
 ## Local checks
 
-Run `npm test` for date and encryption behavior. To verify the EMS search and court selection locally after login, run `STATE_KEY="$(cat state-key.txt)" MODE=dry-run node --env-file=.env src/run.mjs`. Dry-run does not need contact details and does not fill or submit the reservation details form.
+Run `npm test` for date and encryption behavior. To verify the EMS search and court selection locally after login, run `STATE_KEY="$(cat state-key.txt)" MODE=dry-run node --env-file=.env src/run.mjs`. Dry-run does not need contact details and does not fill or submit the reservation details form. It skips court selection when the target date is already recorded as booked.
 
 If the headless dry run reaches an EMS error page while EMS works in your browser, try the same saved session in a visible browser with `STATE_KEY="$(cat state-key.txt)" HEADLESS=false MODE=dry-run node --env-file=.env src/run.mjs`. This still does not submit a reservation.
