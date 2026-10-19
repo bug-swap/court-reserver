@@ -4,7 +4,7 @@ GitHub Actions requests a CU Recreation Center court in EMS each day shortly aft
 
 The public [GitHub Pages settings form](https://dracula-101.github.io/court-reserver/) chooses squash or badminton, the start time, and optionally badminton court 3A, 3B, or 3C. The form saves `site/config.json` with a fine-grained GitHub token. The next Actions run copies those settings into Supabase and uses them for booking. The token is cleared after saving; it is never committed or stored by the page.
 
-Supabase is the durable runtime store, shared with the `canvas-emailer` project but using only `court_*` tables. `court_session` contains an AES-256-GCM encrypted EMS browser session, `court_bookings` records successful dates to prevent duplicates, `court_runs` records outcomes, and `court_settings` mirrors the current booking choices. The Supabase secret key and the independent `STATE_KEY` stay in GitHub Actions secrets. No browser page receives either key. Supabase Row Level Security is enabled for all court tables, and there are no public policies.
+Supabase is the durable runtime store, shared with the `canvas-emailer` project but using only `court_*` tables. `court_session` contains an AES-256-GCM encrypted EMS browser session, `court_bookings` records successful dates to prevent duplicates, `court_runs` records outcomes, and `court_settings` mirrors the current booking choices. Canvas keeps its own session in the `canvas-session/session.json` Storage object; it does not read or overwrite `court_session`. The projects use the same Supabase API key to access that project, while EMS and Canvas browser sessions remain separate. The independent `STATE_KEY` encrypts only the court session. No browser page receives either key. Supabase Row Level Security is enabled for all court tables, and there are no public policies.
 
 ## Setup
 
@@ -27,7 +27,7 @@ Supabase is the durable runtime store, shared with the `canvas-emailer` project 
    The older `EMS_INITIAL_STATE` secret is an optional fallback only when the Supabase session row is empty; it is no longer the primary state store. Add secrets with `gh secret set NAME` or in repository Settings. Do not paste values into chat.
 5. Trigger **Reserve CU court** with `dry-run` to inspect the EMS form without submitting a reservation. Automatic booking uses the same selectors and submits on scheduled runs.
 
-The workflow runs Chromium headed under Xvfb because EMS returns an error page to headless Chromium. Its two midnight schedules cover Mountain daylight saving changes. GitHub scheduled jobs can be delayed, and EMS or Microsoft can expire a session despite keepalive visits. Check Actions for failures and rerun `npm run login` when the session expires. After a new login, update the `STATE_KEY` Actions secret to match the newly generated `state-key.txt`.
+The workflow runs Chromium headed under Xvfb because EMS returns an error page to headless Chromium. Court jobs start at :15 or :45 UTC to avoid starting at the same time as Canvas's top-of-hour and half-hour jobs; the midnight schedules cover Mountain daylight saving changes. GitHub scheduled jobs can be delayed, and EMS or Microsoft can expire a session despite keepalive visits. Check Actions for failures and rerun `npm run login` when the session expires. After a new login, update the `STATE_KEY` Actions secret to match the newly generated `state-key.txt`.
 
 ## Local checks
 
