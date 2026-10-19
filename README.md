@@ -27,7 +27,7 @@ Supabase is the durable runtime store, shared with the `canvas-emailer` project 
    The older `EMS_INITIAL_STATE` secret is an optional fallback only when the Supabase session row is empty; it is no longer the primary state store. Add secrets with `gh secret set NAME` or in repository Settings. Do not paste values into chat.
 5. Trigger **Reserve CU court** with `dry-run` to inspect the EMS form without submitting a reservation. Automatic booking uses the same selectors and submits on scheduled runs.
 
-The workflow's two midnight schedules cover Mountain daylight saving changes. GitHub scheduled jobs can be delayed, and EMS or Microsoft can expire a session despite keepalive visits. Check Actions for failures and rerun `npm run login` when the session expires. After a new login, update the `STATE_KEY` Actions secret to match the newly generated `state-key.txt`.
+The workflow runs Chromium headed under Xvfb because EMS returns an error page to headless Chromium. Its two midnight schedules cover Mountain daylight saving changes. GitHub scheduled jobs can be delayed, and EMS or Microsoft can expire a session despite keepalive visits. Check Actions for failures and rerun `npm run login` when the session expires. After a new login, update the `STATE_KEY` Actions secret to match the newly generated `state-key.txt`.
 
 ## Local checks
 

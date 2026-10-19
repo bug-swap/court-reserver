@@ -48,4 +48,4 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Visit EMS and reserve court
-        run: npm run run
+        run: xvfb-run -a env HEADLESS=false npm run run
