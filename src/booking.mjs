@@ -40,8 +40,21 @@ async function chooseYes(page, label) {
     grandparent.getByRole('combobox')
   ], `Yes choice for ${label}`);
   const tag = await yes.evaluate(element => element.tagName.toLowerCase());
-  if (tag === 'select') await yes.selectOption({ label: 'Yes' });
-  else await yes.check().catch(async () => yes.click());
+  if (tag === 'select') {
+    const options = await yes.locator('option').evaluateAll(elements =>
+      elements.map(option => ({
+        label: option.label.trim(),
+        value: option.value
+      }))
+    );
+    const affirmative = options.find(option => /^yes$/i.test(option.label));
+    if (!affirmative) {
+      throw new Error(`Could not find a Yes option for ${label}; available options: ${options.map(option => option.label).join(', ')}`);
+    }
+    await yes.selectOption({ value: affirmative.value });
+  } else {
+    await yes.check().catch(async () => yes.click());
+  }
 }
 
 async function chooseDateAndTime(page, date, startTime) {
