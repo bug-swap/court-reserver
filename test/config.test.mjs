@@ -11,5 +11,5 @@ test('books two Denver calendar days ahead across spring DST', () => {
 test('books two Denver calendar days ahead across fall DST', () => {
   assert.equal(targetDate(new Date('2026-11-01T06:07:00Z')), '2026-11-03');
   assert.equal(modeForSchedule(new Date('2026-11-01T06:07:00Z')), 'book');
-  assert.equal(modeForSchedule(new Date('2026-11-01T07:07:00Z')), 'keepalive');
+  assert.equal(modeForSchedule(new Date('2026-11-01T07:07:00Z')), 'book');
 });

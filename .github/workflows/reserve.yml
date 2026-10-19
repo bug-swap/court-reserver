@@ -2,8 +2,8 @@ name: Reserve CU court
 
 on:
   schedule:
-    # 00:07 in Denver is 06:07 UTC in summer and 07:07 UTC in winter.
-    - cron: '7 6,7 * * *'
+    # 00:07 and 00:17 in Denver use different UTC hours across DST.
+    - cron: '7,17 6,7 * * *'
     # Visit EMS every four hours to refresh a renewable session.
     - cron: '0 */4 * * *'
   workflow_dispatch:

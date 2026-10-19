@@ -19,7 +19,7 @@ export function targetDate(date = new Date()) {
 
 export function modeForSchedule(date = new Date()) {
   const { hour, minute } = denverParts(date);
-  return hour === 0 && minute < 50 ? 'book' : 'keepalive';
+  return (hour === 0 || hour === 1) && minute < 50 ? 'book' : 'keepalive';
 }
 
 export function requestedSport(value = 'squash') {

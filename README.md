@@ -1,6 +1,6 @@
 # CU Court Reserver
 
-This project uses Playwright and GitHub Actions to request a CU Recreation Center court in EMS. The default request is **squash, 6–7 PM Mountain time, two calendar days ahead**. `SPORT=badminton` and `START_TIME=06:00` change those defaults. The scheduled run starts at 12:07 AM Denver time and a separate scheduled run visits EMS every four hours. A successful reservation or a booking failure sends an email.
+This project uses Playwright and GitHub Actions to request a CU Recreation Center court in EMS. The default request is **squash, 6–7 PM Mountain time, two calendar days ahead**. Repository variables `SPORT=badminton` and `START_TIME=06:00` change those defaults. Scheduled attempts start at 12:07 and 12:17 AM Denver time; the second run skips dates already recorded as booked. A separate scheduled run visits EMS every four hours. A successful reservation or a booking failure sends an email.
 
 GitHub Pages hosts only the informational page in `site/`. GitHub Actions runs the automation. No login session or contact information is stored in the site or committed to the repository.
 
@@ -8,7 +8,7 @@ GitHub Pages hosts only the informational page in `site/`. GitHub Actions runs t
 
 1. Install Node.js 22 or newer, run `npm ci`, then `npx playwright install chromium`.
 2. Run `npm run login`. Sign in to CU EMS in the opened browser. When the signed-in home page displays **CREATE A RESERVATION**, return to the terminal and press Enter. This creates an encrypted, ignored `initial-state.txt` and prints a 64-character `STATE_KEY`.
-3. Create a **private** GitHub repository for this project and enable GitHub Pages with **GitHub Actions** as the source. A private repository keeps workflow logs and session artifacts restricted. Confirm that the account's plan supports Pages for private repositories; if not, leave Pages disabled rather than making the session workflow public.
+3. Create a GitHub repository for this project and enable GitHub Pages with **GitHub Actions** as the source. Prefer a private repository when the account plan supports Pages for private repositories. A public repository also works because only encrypted session artifacts are uploaded, but its code, schedule, and workflow logs are public. The Pages site itself is public even when the repository is private.
 4. Set repository Actions secrets:
 
    | Secret | Value |

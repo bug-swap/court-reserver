@@ -4,6 +4,7 @@ async function firstVisible(candidates, description) {
   for (const locator of candidates) {
     const first = locator.first();
     if (await first.isVisible().catch(() => false)) return first;
+    if (await first.waitFor({ state: 'visible', timeoutMs: 2000 }).then(() => true).catch(() => false)) return first;
   }
   throw new Error(`Could not find ${description}; the EMS form may have changed`);
 }
@@ -36,6 +37,8 @@ async function chooseYes(page, label) {
 }
 
 async function chooseDateAndTime(page, date, startTime) {
+  await page.getByRole('button', { name: /search/i }).first()
+    .waitFor({ state: 'visible', timeoutMs: 30000 });
   const [year, month, day] = date.split('-');
   const dateUS = `${month}/${day}/${year}`;
   const start = startTime === '06:00' ? '6:00 AM' : '6:00 PM';
