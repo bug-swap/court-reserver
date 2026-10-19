@@ -5,6 +5,7 @@ import { bookCourt, keepAlive } from './booking.mjs';
 import { decryptState, encryptState } from './crypto.mjs';
 import { endTime, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
 import { hasBooking, loadSession, logRun, saveBooking, saveSession, saveSettings } from './supabase.mjs';
+import { captureBrowserState, restoreSessionStorage } from './browser-state.mjs';
 
 const date = targetDate();
 const requestedMode = process.env.MODE || 'auto';
@@ -33,6 +34,7 @@ if (mode === 'book') {
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ storageState: state.browserState });
+await restoreSessionStorage(context, state.sessionStorage);
 const page = await context.newPage();
 let result;
 let error;
@@ -63,10 +65,12 @@ try {
   console.error(caught.message);
 } finally {
   try {
-    state.browserState = await context.storageState();
-    const refreshed = encryptState(state);
-    await saveSession(refreshed);
-    await writeFile('session.enc', refreshed + '\n', { mode: 0o600 });
+    if (!error) {
+      Object.assign(state, await captureBrowserState(context, page));
+      const refreshed = encryptState(state);
+      await saveSession(refreshed);
+      await writeFile('session.enc', refreshed + '\n', { mode: 0o600 });
+    }
   } catch (caught) {
     error ||= caught;
     outcome = 'failed';
