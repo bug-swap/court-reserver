@@ -25,9 +25,9 @@ const contact = {
 let mail;
 if (mode === 'book') {
   if (Object.values(contact).some(value => !value)) throw new Error('CONTACT_NAME, CONTACT_PHONE, CONTACT_EMAIL are required');
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) throw new Error('GMAIL_USER and GMAIL_APP_PASSWORD are required');
-  mail = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD } });
-  await mail.verify();
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    mail = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD } });
+  }
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -84,11 +84,21 @@ if (mode === 'book') {
     : result?.submitted
       ? `CU ${sport} court reservation confirmed for ${date}, ${startTime}–${endTime(startTime)} Mountain time.\n\n${result.confirmation}`
       : `CU court reservation for ${date} was already recorded. No duplicate was submitted.`;
-  await mail.sendMail({
-    from: process.env.GMAIL_USER,
-    to: contact.email,
-    subject: error ? `CU court reservation failed: ${date}` : `CU court reservation: ${date}`,
-    text: body
-  });
+  if (!mail) {
+    console.error('Booking email unavailable: GMAIL_USER and GMAIL_APP_PASSWORD are required');
+    process.exitCode = 1;
+  } else {
+    try {
+      await mail.sendMail({
+        from: process.env.GMAIL_USER,
+        to: contact.email,
+        subject: error ? `CU court reservation failed: ${date}` : `CU court reservation: ${date}`,
+        text: body
+      });
+    } catch (mailError) {
+      console.error(`Booking email failed: ${mailError.message}`);
+      process.exitCode = 1;
+    }
+  }
 }
 if (error) process.exitCode = 1;
