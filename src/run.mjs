@@ -32,7 +32,7 @@ if (mode === 'book') {
   }
 }
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: process.env.HEADLESS !== 'false' });
 const context = await browser.newContext({ storageState: state.browserState });
 await restoreSessionStorage(context, state.sessionStorage);
 const page = await context.newPage();

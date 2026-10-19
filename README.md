@@ -31,4 +31,6 @@ The workflow's two midnight schedules cover Mountain daylight saving changes. Gi
 
 ## Local checks
 
-Run `npm test` for date and encryption behavior. To verify the full EMS form locally after login, run `STATE_KEY="$(cat state-key.txt)" MODE=dry-run node --env-file=.env src/run.mjs`. This reaches the final step without pressing **Create Reservation**.
+Run `npm test` for date and encryption behavior. To verify the EMS search and court selection locally after login, run `STATE_KEY="$(cat state-key.txt)" MODE=dry-run node --env-file=.env src/run.mjs`. Dry-run does not need contact details and does not fill or submit the reservation details form.
+
+If the headless dry run reaches an EMS error page while EMS works in your browser, try the same saved session in a visible browser with `STATE_KEY="$(cat state-key.txt)" HEADLESS=false MODE=dry-run node --env-file=.env src/run.mjs`. This still does not submit a reservation.

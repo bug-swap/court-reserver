@@ -13,6 +13,7 @@ const page = await context.newPage();
 await page.goto(EMS_URL);
 console.log('Sign in to CU EMS in this window. Once “CREATE A RESERVATION” appears, press Enter here.');
 await new Promise(resolve => process.stdin.once('data', resolve));
+process.stdin.pause();
 if (new URL(page.url()).origin !== new URL(EMS_URL).origin ||
     await page.getByRole('button', { name: /^sign in$/i }).isVisible().catch(() => false) ||
     await page.locator('a[href*="BrowseReservations.aspx"]').count() === 0) {

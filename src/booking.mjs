@@ -18,6 +18,14 @@ async function fillField(page, label, value, selectors = []) {
   await input.fill(value);
 }
 
+async function closeTimePicker(page) {
+  const clickOff = page.locator('[data-action="close"].picker-clickoff:visible').last();
+  if (await clickOff.count()) {
+    await clickOff.click();
+    await clickOff.waitFor({ state: 'hidden' });
+  }
+}
+
 async function chooseYes(page, label) {
   const question = page.getByText(label).first();
   const parent = question.locator('xpath=..');
@@ -50,12 +58,14 @@ async function chooseDateAndTime(page, date, startTime) {
   ], 'start time picker');
   await startControl.click();
   await fillField(page, /StartTime Required/i, start, ['input[name*="StartTime" i]', 'input[id*="StartTime" i]']);
+  await closeTimePicker(page);
   const endControl = await firstVisible([
     page.locator('[aria-label*="Edit booking end time" i], [title*="Edit booking end time" i]'),
     page.getByText('End Time', { exact: true }).locator('xpath=..')
   ], 'end time picker');
   await endControl.click();
   await fillField(page, /EndTime Required/i, end, ['input[name*="EndTime" i]', 'input[id*="EndTime" i]']);
+  await closeTimePicker(page);
   if (await page.getByText(/Date must be prior|Start Time in the past/i).first().isVisible().catch(() => false)) {
     throw new Error('EMS rejected the selected date or time before searching');
   }
@@ -66,7 +76,7 @@ async function chooseDateAndTime(page, date, startTime) {
 }
 
 async function selectCourt(page, sport, badmintonRoom) {
-  await page.getByText('Rooms You Can Reserve').waitFor({ state: 'visible', timeout: 30000 });
+  await page.getByText('Rooms You Can Reserve').first().waitFor({ state: 'visible', timeout: 30000 });
   const roomNames = sport === 'squash'
     ? ['Squash Court']
     : badmintonRoom === 'any'
@@ -85,7 +95,10 @@ async function selectCourt(page, sport, badmintonRoom) {
   }
   if (!add) throw new Error(`No selectable ${sport} court found for the requested hour`);
   await add.click();
-  await page.getByText(/My Cart \(1\)/i).waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(() => {
+    const cart = document.querySelector('#cart-header-container');
+    return /My Cart\s*\(\s*1\s*\)/i.test(cart?.textContent || '');
+  }, null, { timeout: 10000 });
   await (await firstVisible([
     page.getByRole('button', { name: /next step/i }),
     page.getByRole('link', { name: /next step/i })
@@ -124,7 +137,7 @@ export async function bookCourt(page, { date, startTime, sport, badmintonRoom, c
   await keepAlive(page);
   await chooseDateAndTime(page, date, startTime);
   await selectCourt(page, sport, badmintonRoom);
-  await fillDetails(page, contact);
+  if (!dryRun) await fillDetails(page, contact);
   const create = await firstVisible([
     page.getByRole('button', { name: /create reservation/i }),
     page.getByRole('link', { name: /create reservation/i })
