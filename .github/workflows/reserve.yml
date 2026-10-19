@@ -4,7 +4,9 @@ on:
   schedule:
     # 00:07 and 00:17 in Denver use different UTC hours across DST.
     - cron: '7,17 6,7 * * *'
-    # Visit EMS every four hours to refresh a renewable session.
+    # Extra early-morning attempts in case EMS is unavailable at midnight.
+    - cron: '7 8-10 * * *'
+    # Every four hours: retry an unbooked date, or refresh a booked session.
     - cron: '0 */4 * * *'
   workflow_dispatch:
     inputs:

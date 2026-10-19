@@ -17,11 +17,6 @@ export function targetDate(date = new Date()) {
   return target.toISOString().slice(0, 10);
 }
 
-export function modeForSchedule(date = new Date()) {
-  const { hour, minute } = denverParts(date);
-  return (hour === 0 || hour === 1) && minute < 50 ? 'book' : 'keepalive';
-}
-
 export function requestedSport(value = 'squash') {
   const sport = value.trim().toLowerCase();
   if (!['squash', 'badminton'].includes(sport)) throw new Error('SPORT must be squash or badminton');

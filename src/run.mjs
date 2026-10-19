@@ -3,15 +3,16 @@ import { readFile, writeFile } from 'node:fs/promises';
 import nodemailer from 'nodemailer';
 import { bookCourt, keepAlive } from './booking.mjs';
 import { decryptState, encryptState } from './crypto.mjs';
-import { endTime, modeForSchedule, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
+import { endTime, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
 import { hasBooking, loadSession, logRun, saveBooking, saveSession, saveSettings } from './supabase.mjs';
 
-const mode = process.env.MODE === 'auto' || !process.env.MODE ? modeForSchedule() : process.env.MODE;
+const date = targetDate();
+const requestedMode = process.env.MODE || 'auto';
+const mode = requestedMode === 'auto' ? (await hasBooking(date) ? 'keepalive' : 'book') : requestedMode;
 if (!['book', 'keepalive', 'dry-run'].includes(mode)) throw new Error('MODE must be auto, book, keepalive, or dry-run');
 const encrypted = await loadSession() || process.env.EMS_INITIAL_STATE ||
   await readFile('initial-state.txt', 'utf8').catch(() => { throw new Error('No EMS session in Supabase. Run npm run login to capture one.'); });
 const state = decryptState(encrypted);
-const date = targetDate();
 const settings = JSON.parse(await readFile('site/config.json', 'utf8'));
 await saveSettings(settings);
 const sport = requestedSport(process.env.SPORT || settings.sport);
