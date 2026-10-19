@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { EMS_URL } from './config.mjs';
 import { encryptState } from './crypto.mjs';
+import { saveSession } from './supabase.mjs';
 
 process.env.STATE_KEY ||= randomBytes(32).toString('hex');
 const browser = await chromium.launch({ headless: false });
@@ -19,5 +20,9 @@ if (new URL(page.url()).origin !== new URL(EMS_URL).origin ||
 const encrypted = encryptState({ browserState: await context.storageState(), bookedDates: [] });
 await writeFile('initial-state.txt', encrypted + '\n', { mode: 0o600 });
 await writeFile('state-key.txt', process.env.STATE_KEY + '\n', { mode: 0o600 });
-console.log('Saved encrypted initial-state.txt and its key in state-key.txt. Add both as GitHub Actions secrets.');
+console.log('Saved encrypted initial-state.txt and its key in state-key.txt. Add STATE_KEY as a GitHub Actions secret.');
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+  await saveSession(encrypted);
+  console.log('Uploaded encrypted EMS session to Supabase.');
+}
 await browser.close();

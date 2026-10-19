@@ -21,16 +21,16 @@ concurrency:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   reserve:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      GH_TOKEN: ${{ github.token }}
       STATE_KEY: ${{ secrets.STATE_KEY }}
       EMS_INITIAL_STATE: ${{ secrets.EMS_INITIAL_STATE }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       CONTACT_NAME: ${{ secrets.CONTACT_NAME }}
       CONTACT_PHONE: ${{ secrets.CONTACT_PHONE }}
       CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
@@ -45,27 +45,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Restore encrypted EMS session
-        shell: bash
-        run: |
-          set -euo pipefail
-          artifact_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ems-session&per_page=100" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | last | .id // empty')
-          if [[ -n "$artifact_id" ]]; then
-            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > /tmp/ems-session.zip
-            unzip -p /tmp/ems-session.zip session.enc > session.enc
-          elif [[ -n "$EMS_INITIAL_STATE" ]]; then
-            printf '%s\n' "$EMS_INITIAL_STATE" > session.enc
-          else
-            echo 'No EMS session found. Run npm run login and set EMS_INITIAL_STATE.' >&2
-            exit 1
-          fi
       - name: Visit EMS and reserve court
         run: npm run run
-      - name: Save refreshed encrypted EMS session
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ems-session
-          path: session.enc
-          if-no-files-found: ignore
-          retention-days: 30

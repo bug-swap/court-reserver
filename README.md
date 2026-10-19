@@ -1,33 +1,34 @@
 # CU Court Reserver
 
-This project uses Playwright and GitHub Actions to request a CU Recreation Center court in EMS. The default request is **squash, 6–7 PM Mountain time, one calendar day ahead**. The EMS court template currently allows bookings only one day ahead. Scheduled attempts start at 12:07 and 12:17 AM Denver time; later backup attempts may also run. Each run skips a date already recorded as booked. A separate scheduled run visits EMS every four hours. A successful reservation or a booking failure sends an email.
+GitHub Actions requests a CU Recreation Center court in EMS each day shortly after midnight Denver time, for the next day's one-hour slot. The default is squash from 6–7 PM. It also visits EMS every four hours to refresh the session. A booking confirmation or failure sends email.
 
-GitHub Pages hosts the settings form in `site/`. Choose squash or badminton, a one-hour start time, and optionally badminton court 3A, 3B, or 3C. Save writes `site/config.json` through GitHub's REST API using a fine-grained token entered on the page. The token must be limited to this repository with **Contents: Read and write** permission. The page clears the token field after the request and does not put it in browser storage, a URL, or the repository. GitHub Actions reads the saved config when booking. No EMS login session or contact information is committed to the repository.
+The public [GitHub Pages settings form](https://dracula-101.github.io/court-reserver/) chooses squash or badminton, the start time, and optionally badminton court 3A, 3B, or 3C. The form saves `site/config.json` with a fine-grained GitHub token. The next Actions run copies those settings into Supabase and uses them for booking. The token is cleared after saving; it is never committed or stored by the page.
 
-## Initial setup
+Supabase is the durable runtime store, shared with the `canvas-emailer` project but using only `court_*` tables. `court_session` contains an AES-256-GCM encrypted EMS browser session, `court_bookings` records successful dates to prevent duplicates, `court_runs` records outcomes, and `court_settings` mirrors the current booking choices. The Supabase secret key and the independent `STATE_KEY` stay in GitHub Actions secrets. No browser page receives either key. Supabase Row Level Security is enabled for all court tables, and there are no public policies.
 
-1. Install Node.js 22 or newer, run `npm ci`, then `npx playwright install chromium`.
-2. Run `npm run login`. Sign in to CU EMS in the opened browser. When the signed-in home page displays **CREATE A RESERVATION**, return to the terminal and press Enter. This creates ignored `initial-state.txt` and `state-key.txt` files. Both are needed to use the session.
-3. The public `Dracula-101/court-reserver` repository uses GitHub Pages with **GitHub Actions** as the source. Its code, schedule, and workflow logs are public; the site contains no login session or contact details.
-4. Set repository Actions secrets:
+## Setup
+
+1. In the same Supabase project used by `canvas-emailer`, run [supabase_schema.sql](supabase_schema.sql) in the SQL Editor. It creates only court-specific tables and leaves Canvas data alone.
+2. Add `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` to an ignored local `.env`. Use the same values as `canvas-emailer`. `SUPABASE_SERVICE_KEY` can be a current Supabase secret key or older `service_role` key. Never put it in `site/` or commit it.
+3. Run `npm ci` and `npx playwright install chromium`. Then run `npm run login`; sign in to EMS and press Enter when **CREATE A RESERVATION** is visible. This creates ignored `initial-state.txt` and `state-key.txt`, and uploads the encrypted session to Supabase. Login capture is the only manual browser step. The school SSO session may still expire and require another capture.
+4. Add repository Actions secrets:
 
    | Secret | Value |
    | --- | --- |
+   | `SUPABASE_URL` | Supabase project URL |
+   | `SUPABASE_SERVICE_KEY` | Server-side Supabase secret key |
    | `STATE_KEY` | Entire contents of `state-key.txt` |
-   | `EMS_INITIAL_STATE` | Entire contents of `initial-state.txt` |
    | `CONTACT_NAME` | Reservation contact name |
    | `CONTACT_PHONE` | Reservation contact phone |
    | `CONTACT_EMAIL` | Reservation contact and notification email |
    | `GMAIL_USER` | Gmail address that sends notifications |
    | `GMAIL_APP_PASSWORD` | Gmail app password for that account |
 
-   Examples: `gh secret set STATE_KEY < state-key.txt` and `gh secret set EMS_INITIAL_STATE < initial-state.txt`. Enter the other secret values using `gh secret set NAME` so they do not appear in shell history.
-5. Create a fine-grained GitHub token restricted to `Dracula-101/court-reserver` with **Contents: Read and write**. Enter it on the Pages form each time settings change; do not paste it into chat or commit it. Run **Reserve CU court** manually with `dry-run` to check the EMS form without submitting a reservation. If that succeeds, the scheduled booking and session refreshes are ready.
+   The older `EMS_INITIAL_STATE` secret is an optional fallback only when the Supabase session row is empty; it is no longer the primary state store. Add secrets with `gh secret set NAME` or in repository Settings. Do not paste values into chat.
+5. Trigger **Reserve CU court** with `dry-run` to inspect the EMS form without submitting a reservation. Automatic booking uses the same selectors and submits on scheduled runs.
 
-The workflow retains the latest browser session as an AES-256-GCM encrypted GitHub Actions artifact. Only the `STATE_KEY` secret decrypts it. The initial secret is used if no recent artifact exists. GitHub Actions schedules can be delayed, and CU or Microsoft may expire a session even when it is visited regularly. When that happens, run `npm run login` again, update both `STATE_KEY` and `EMS_INITIAL_STATE`, then delete the expired `ems-session` artifact or let it expire. A stale artifact takes precedence over the initial secret.
-
-GitHub may disable scheduled workflows in an inactive public repository. Check the Actions page periodically. The page itself saves only settings; GitHub Actions executes bookings.
+The workflow's two midnight schedules cover Mountain daylight saving changes. GitHub scheduled jobs can be delayed, and EMS or Microsoft can expire a session despite keepalive visits. Check Actions for failures and rerun `npm run login` when the session expires. After a new login, update the `STATE_KEY` Actions secret to match the newly generated `state-key.txt`.
 
 ## Local checks
 
-Run `npm test` for Denver date and daylight saving calculations. After `npm run login`, run `STATE_KEY="$(cat state-key.txt)" MODE=dry-run npm run run` to verify selectors before enabling the scheduled action. The dry run reaches the final form but does not press **Create Reservation**.
+Run `npm test` for date and encryption behavior. To verify the full EMS form locally after login, run `STATE_KEY="$(cat state-key.txt)" MODE=dry-run node --env-file=.env src/run.mjs`. This reaches the final step without pressing **Create Reservation**.

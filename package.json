@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "login": "node src/login.mjs",
+    "login": "node --env-file-if-exists=.env src/login.mjs",
     "run": "node src/run.mjs",
     "test": "node --test"
   },
