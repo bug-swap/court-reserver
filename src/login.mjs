@@ -17,6 +17,6 @@ if (!await page.getByText(/CREATE A RESERVATION/i).isVisible().catch(() => false
 }
 const encrypted = encryptState({ browserState: await context.storageState(), bookedDates: [] });
 await writeFile('initial-state.txt', encrypted + '\n', { mode: 0o600 });
-console.log('STATE_KEY=' + process.env.STATE_KEY);
-console.log('Saved encrypted initial-state.txt. Add STATE_KEY and the file contents as GitHub Actions secrets.');
+await writeFile('state-key.txt', process.env.STATE_KEY + '\n', { mode: 0o600 });
+console.log('Saved encrypted initial-state.txt and its key in state-key.txt. Add both as GitHub Actions secrets.');
 await browser.close();

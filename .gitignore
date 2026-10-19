@@ -3,6 +3,7 @@ node_modules/
 *.enc
 *.zip
 initial-state.txt
+state-key.txt
 playwright-report/
 test-results/
 screenshots/
