@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import { readFile, writeFile } from 'node:fs/promises';
 import nodemailer from 'nodemailer';
-import { bookCourt, findSlots, findSquashOpenings, keepAlive, readReservations } from './booking.mjs';
+import { bookCourt, findAvailability, findSquashOpenings, keepAlive, readReservations } from './booking.mjs';
 import { decryptState, encryptState } from './crypto.mjs';
 import { denverParts, emsTime, endTime, requestedDate, requestedFallback, requestedRoom, requestedSport, requestedTime } from './config.mjs';
 import { hasBooking, loadCanvasSession, loadSession, loadSettings, logRun, saveAvailability, saveBooking, saveReservations, saveSession, saveSettings } from './supabase.mjs';
@@ -50,6 +50,15 @@ const canvasSession = await loadCanvasSession().catch(caught => {
 const context = await browser.newContext({ storageState: withSsoCookies(state.browserState, canvasSession.cookies) });
 await restoreSessionStorage(context, state.sessionStorage);
 const page = await context.newPage();
+async function refreshAvailability() {
+  const now = denverParts();
+  const isToday = date === `${now.year}-${String(now.month).padStart(2, '0')}-${String(now.day).padStart(2, '0')}`;
+  const notBefore = isToday ? `${String(now.hour).padStart(2, '0')}:${String(now.minute).padStart(2, '0')}` : '00:00';
+  const courts = await findAvailability(page, date, notBefore);
+  await saveAvailability(date, courts);
+  console.log(`Saved open times for ${date}: ${courts.map(c => `${c.room || c.sport} ${c.openings.length} window(s)`).join(', ')}`);
+}
+
 let result;
 let openings;
 let error;
@@ -60,13 +69,8 @@ try {
     outcome = 'session_active';
     console.log('EMS session active');
   } else if (mode === 'slots') {
-    const now = denverParts();
-    const isToday = date === `${now.year}-${String(now.month).padStart(2, '0')}-${String(now.day).padStart(2, '0')}`;
-    const notBefore = isToday ? `${String(now.hour).padStart(2, '0')}:${String(now.minute).padStart(2, '0')}` : '00:00';
-    const courts = await findSlots(page, date, notBefore);
-    await saveAvailability(date, courts);
+    await refreshAvailability();
     outcome = 'slots_ready';
-    console.log(`Saved open slots for ${date}: ${courts.map(c => `${c.room || c.sport} ${c.slots.length}`).join(', ')}`);
   } else if (mode !== 'keepalive' && (await hasBooking(date) || state.bookedDates?.includes(date))) {
     outcome = 'already_booked';
     console.log(`Already booked ${date}; skipping court selection`);
@@ -94,6 +98,10 @@ try {
       console.error(`Could not read squash openings: ${caught.message}`);
     });
   }
+  // Keep the settings page's free times current after every successful visit to EMS.
+  if (mode !== 'slots') {
+    await refreshAvailability().catch(caught => console.error(`Could not refresh open times: ${caught.message}`));
+  }
   await readReservations(page).then(saveReservations).catch(caught => {
     console.error(`Could not sync EMS reservations: ${caught.message}`);
   });
@@ -102,6 +110,10 @@ try {
   outcome = 'failed';
   await page.screenshot({ path: 'failure.png', fullPage: true }).catch(() => {});
   console.error(caught.message);
+  if (mode === 'book') {
+    // A failed booking usually means the time was taken; show the page what is free now.
+    await refreshAvailability().catch(() => {});
+  }
   if (mode === 'book' && caught.message.startsWith('Squash is unavailable')) {
     // No automatic switch to another sport: report free squash times so a new one can be chosen on the settings page.
     openings = await findSquashOpenings(page, date, startTime).catch(() => undefined);
