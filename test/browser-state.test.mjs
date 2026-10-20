@@ -26,6 +26,10 @@ test('does not capture storage from another origin', async () => {
     evaluate: () => { throw new Error('should not read other origin'); }
   };
   assert.deepEqual((await captureBrowserState(context, page)).sessionStorage, {});
+  assert.deepEqual(
+    (await captureBrowserState(context, page, { auth: 'keep-me' })).sessionStorage,
+    { auth: 'keep-me' }
+  );
   let installed;
   await restoreSessionStorage({ addInitScript: async (script, storage) => { installed = { script, storage }; } }, { auth: 'opaque' });
   assert.deepEqual(installed.storage, { auth: 'opaque' });

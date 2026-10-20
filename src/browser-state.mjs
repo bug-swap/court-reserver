@@ -1,10 +1,10 @@
 const EMS_ORIGIN = 'https://ems.colorado.edu';
 
-export async function captureBrowserState(context, page) {
+export async function captureBrowserState(context, page, previousSessionStorage = {}) {
   const browserState = await context.storageState({ indexedDB: true });
   const sessionStorage = new URL(page.url()).origin === EMS_ORIGIN
     ? JSON.parse(await page.evaluate(() => JSON.stringify(window.sessionStorage)))
-    : {};
+    : previousSessionStorage;
   return { browserState, sessionStorage };
 }
 

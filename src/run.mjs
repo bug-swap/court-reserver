@@ -74,7 +74,7 @@ try {
 } finally {
   try {
     if (!error) {
-      Object.assign(state, await captureBrowserState(context, page));
+      Object.assign(state, await captureBrowserState(context, page, state.sessionStorage));
       const refreshed = encryptState(state);
       await saveSession(refreshed);
       await writeFile('session.enc', refreshed + '\n', { mode: 0o600 });
