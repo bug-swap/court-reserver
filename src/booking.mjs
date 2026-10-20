@@ -135,7 +135,7 @@ async function selectCourt(page, sport, badmintonRoom, squashFallback) {
   if (!selected) {
     const fallback = sport === 'squash'
       ? squashFallback === 'badminton'
-        ? 'Squash is unavailable and badminton courts 3C, 3A, and 3B are also unavailable'
+        ? 'Squash is unavailable within 3 hours and badminton courts 3C, 3A, and 3B are also unavailable'
         : 'Squash is unavailable (no backup court is chosen)'
       : `No selectable badminton court found${badmintonRoom === 'any' ? ' (tried 3A, 3B, 3C)' : ` for court ${badmintonRoom}`}`;
     throw new Error(`${fallback} for the requested hour`);
@@ -185,10 +185,41 @@ export async function keepAlive(page) {
   if (page.url().includes('login.microsoftonline.com')) throw new Error('EMS session expired');
 }
 
+function rethrowUnlessSquashTaken(error) {
+  if (!error.message.startsWith('Squash is unavailable')) throw error;
+  return null;
+}
+
+// Runs an EMS room search and returns the room and booking data behind its results grid.
+async function search(page, date, startTime) {
+  const json = async response => JSON.parse((await response.json()).d);
+  const [rooms, bookings] = await Promise.all([
+    page.waitForResponse(r => r.url().includes('GetBrowseLocationsRoomsForRoomRequest'), { timeout: 60000 }).then(json),
+    page.waitForResponse(r => r.url().includes('GetBrowseLocationsBookingsForRoomRequest'), { timeout: 60000 }).then(json),
+    chooseDateAndTime(page, date, startTime)
+  ]);
+  return { rooms, bookings };
+}
+
 export async function bookCourt(page, { date, startTime, sport, badmintonRoom, squashFallback, contact, dryRun = false }) {
   await keepAlive(page);
-  await chooseDateAndTime(page, date, startTime);
-  const selectedCourt = await selectCourt(page, sport, badmintonRoom, squashFallback);
+  const availability = await search(page, date, startTime);
+  let bookedTime = startTime;
+  let selectedCourt;
+  if (sport === 'squash' && squashFallback === 'badminton') {
+    // Prefer squash at another time within three hours; badminton only when none fits.
+    selectedCourt = await selectCourt(page, 'squash', badmintonRoom, 'none').catch(rethrowUnlessSquashTaken);
+    const nearby = selectedCourt ? null : nearestSquashStart(squashOpenings(availability.rooms, availability.bookings, date), startTime);
+    if (nearby) {
+      await search(page, date, nearby);
+      selectedCourt = await selectCourt(page, 'squash', badmintonRoom, 'none');
+      bookedTime = nearby;
+    } else if (!selectedCourt) {
+      selectedCourt = await selectCourt(page, sport, badmintonRoom, squashFallback);
+    }
+  } else {
+    selectedCourt = await selectCourt(page, sport, badmintonRoom, squashFallback);
+  }
   if (!dryRun) await fillDetails(page, contact);
   const create = await firstVisible([
     page.getByRole('button', { name: /create reservation/i }),
@@ -199,6 +230,7 @@ export async function bookCourt(page, { date, startTime, sport, badmintonRoom, s
       submitted: false,
       sport: selectedCourt.sport,
       badmintonRoom: selectedCourt.room || badmintonRoom,
+      startTime: bookedTime,
       pageText: (await page.locator('body').innerText()).slice(-3000)
     };
   }
@@ -210,6 +242,7 @@ export async function bookCourt(page, { date, startTime, sport, badmintonRoom, s
     submitted: true,
     sport: selectedCourt.sport,
     badmintonRoom: selectedCourt.room || badmintonRoom,
+    startTime: bookedTime,
     confirmation
   };
 }
@@ -233,20 +266,27 @@ export function squashOpenings(roomsData, bookingsData, date) {
   const openings = [];
   let free = minutes(hours.OpenTime.slice(11));
   for (const [start, end] of [...busy, [close, close]]) {
-    if (start - free >= needed) openings.push({ start: clock(free), end: clock(start) });
+    if (start - free >= needed) openings.push({ start: clock(free), end: clock(start), lastStart: clock(start - needed) });
     free = Math.max(free, end);
   }
   return openings;
 }
 
+// The open squash start closest to the preferred time, at most maxShift minutes away.
+export function nearestSquashStart(openings, startTime, maxShift = 180) {
+  const preferred = minutes(startTime);
+  let best = null;
+  for (const opening of openings) {
+    const start = Math.min(Math.max(preferred, minutes(opening.start)), minutes(opening.lastStart));
+    const shift = Math.abs(start - preferred);
+    if (shift <= maxShift && (best === null || shift < Math.abs(best - preferred))) best = start;
+  }
+  return best === null ? null : clock(best);
+}
+
 export async function findSquashOpenings(page, date, startTime) {
   await keepAlive(page);
-  const json = async response => JSON.parse((await response.json()).d);
-  const [rooms, bookings] = await Promise.all([
-    page.waitForResponse(r => r.url().includes('GetBrowseLocationsRoomsForRoomRequest'), { timeout: 60000 }).then(json),
-    page.waitForResponse(r => r.url().includes('GetBrowseLocationsBookingsForRoomRequest'), { timeout: 60000 }).then(json),
-    chooseDateAndTime(page, date, startTime)
-  ]);
+  const { rooms, bookings } = await search(page, date, startTime);
   return squashOpenings(rooms, bookings, date);
 }
 

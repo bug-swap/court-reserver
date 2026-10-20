@@ -68,17 +68,17 @@ try {
       await saveBooking({
         date,
         sport: result.sport,
-        startTime,
+        startTime: result.startTime,
         badmintonRoom: result.badmintonRoom,
         confirmation: result.confirmation
       });
       outcome = 'confirmed';
       const bookedCourt = result.sport === 'badminton' ? `badminton court ${result.badmintonRoom}` : 'squash';
-      console.log(`Confirmed ${bookedCourt} for ${date} at ${startTime} Mountain time`);
+      console.log(`Confirmed ${bookedCourt} for ${date} at ${result.startTime} Mountain time`);
     } else {
       outcome = 'dry_run';
       const selectedCourt = result.sport === 'badminton' ? `badminton court ${result.badmintonRoom}` : 'squash';
-      console.log(`Dry run reached the final confirmation step with ${selectedCourt}.`);
+      console.log(`Dry run reached the final confirmation step with ${selectedCourt} at ${result.startTime}.${fallbackNote(result)}`);
     }
   }
   if (mode === 'book' && ['confirmed', 'already_booked'].includes(outcome)) {
@@ -118,6 +118,12 @@ try {
   });
 }
 
+function fallbackNote(booked) {
+  if (sport !== 'squash') return '';
+  if (booked.sport === 'badminton') return ` Squash had no open time within 3 hours of ${startTime}, so badminton was booked.`;
+  return booked.startTime === startTime ? '' : ` Squash was taken at ${startTime}, so the closest open squash time was booked.`;
+}
+
 if (mode === 'book') {
   const squashLine = !openings ? ''
     : openings.length
@@ -127,7 +133,7 @@ if (mode === 'book') {
   const body = error
     ? `CU court reservation could not be completed for ${date} at ${startTime} Mountain time. Check the GitHub Actions run for details. Error: ${error.message}`
     : result?.submitted
-      ? `CU ${result.sport === 'badminton' ? `badminton court ${result.badmintonRoom}` : 'squash'} reservation confirmed for ${date}, ${startTime}–${endTime(startTime)} Mountain time.\n\n${result.confirmation}`
+      ? `CU ${result.sport === 'badminton' ? `badminton court ${result.badmintonRoom}` : 'squash'} reservation confirmed for ${date}, ${result.startTime}–${endTime(result.startTime)} Mountain time.${fallbackNote(result)}\n\n${result.confirmation}`
       : `CU court reservation for ${date} was already recorded. No duplicate was submitted.`;
   const text = body + squashLine + settingsLine;
   if (!mail) {

@@ -31,7 +31,7 @@ function refresh() {
     ? 'Squash Court'
     : room.value === 'any' ? 'any available badminton court' : `Badminton court ${room.value}`;
   summary.textContent = valid
-    ? `Every day: request ${court} for tomorrow, ${timeLabel(start.value)}–${end.value} Mountain time.${sport.value === 'squash' ? fallback.value === 'badminton' ? ' If squash is taken, book a free badminton court instead.' : ' If squash is taken, nothing is booked.' : ''}`
+    ? `Every day: request ${court} for tomorrow, ${timeLabel(start.value)}–${end.value} Mountain time.${sport.value === 'squash' ? fallback.value === 'badminton' ? ' If squash is taken, book the closest open squash time within 3 hours, otherwise a free badminton court at this time.' : ' If squash is taken, nothing is booked.' : ''}`
     : 'Choose a start time that leaves one full hour before midnight.';
   return valid;
 }
