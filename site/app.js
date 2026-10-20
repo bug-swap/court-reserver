@@ -1,3 +1,11 @@
+const canvasAuthStartedAt = Number(localStorage.getItem('canvas-dashboard-auth-started-at') || 0);
+if (location.pathname === '/court-reserver/' && location.hash.includes('access_token=') && Date.now() - canvasAuthStartedAt < 15 * 60 * 1000) {
+  localStorage.removeItem('canvas-dashboard-auth-started-at');
+  location.replace(`${location.origin}/court-reserver/canvas-emailer/${location.hash}`);
+} else if (canvasAuthStartedAt && Date.now() - canvasAuthStartedAt >= 15 * 60 * 1000) {
+  localStorage.removeItem('canvas-dashboard-auth-started-at');
+}
+
 const form = document.querySelector('#settings-form');
 const authForm = document.querySelector('#auth-form');
 const sport = document.querySelector('#sport');
