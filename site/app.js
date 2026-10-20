@@ -8,7 +8,7 @@ const message = document.querySelector('#message');
 const roomField = document.querySelector('#room-field');
 const tokenInput = document.querySelector('#github-token');
 const saveButton = document.querySelector('#save-button');
-const configApiUrl = 'https://api.github.com/repos/Dracula-101/court-reserver/contents/site/config.json';
+const configApiUrl = 'https://api.github.com/repos/bug-swap/court-reserver/contents/site/config.json';
 
 const timeLabel = value => {
   const [hour, minute] = value.split(':').map(Number);
@@ -77,7 +77,7 @@ form.addEventListener('submit', async event => {
   event.preventDefault();
   showMessage('');
   if (!refresh()) return showMessage('The time must end before midnight.', true);
-  if (location.origin !== 'https://dracula-101.github.io' || !location.pathname.startsWith('/court-reserver/')) {
+  if (location.origin !== 'https://bug-swap.github.io' || !location.pathname.startsWith('/court-reserver/')) {
     return showMessage('Open the published GitHub Pages site to save settings.', true);
   }
   const token = tokenInput.value.trim();
