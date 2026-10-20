@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { clipOpenings, courtCandidates, nearestSquashStart, squashOpenings } from '../src/booking.mjs';
+import { courtCandidates, nearestSquashStart } from '../src/booking.mjs';
+import { clipOpenings, squashOpenings } from '../src/availability.mjs';
 
 test('squash books nothing else unless a badminton fallback is chosen', () => {
   assert.deepEqual(courtCandidates('squash', 'any'), [{ sport: 'squash', room: null, name: 'Squash Court' }]);

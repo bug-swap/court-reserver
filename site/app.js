@@ -193,10 +193,13 @@ async function initialize() {
     const checkedAt = new Date(result.fetchedAt);
     const ageMinutes = Math.round((Date.now() - checkedAt) / 60000);
     const checked = checkedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    showMessage(slotsMessage, ageMinutes > 30
-      ? `Checked at ${checked}, ${ageMinutes >= 120 ? `${Math.round(ageMinutes / 60)} hours` : `${ageMinutes} minutes`} ago. Courts may have been booked since; check EMS again for current times.`
-      : `Checked at ${checked}. Green is free; booking re-checks EMS.`);
-    slotsMessage.classList.toggle('stale', ageMinutes > 30);
+    const stale = !result.live && ageMinutes > 30;
+    showMessage(slotsMessage, result.live
+      ? `Live from EMS at ${checked}. Green is free; booking re-checks EMS.`
+      : stale
+        ? `Saved at ${checked}, ${ageMinutes >= 120 ? `${Math.round(ageMinutes / 60)} hours` : `${ageMinutes} minutes`} ago${result.liveError ? ` (${result.liveError})` : ''}. Courts may have been booked since.`
+        : `Saved at ${checked}${result.liveError ? ` (${result.liveError})` : ''}. Booking re-checks EMS.`);
+    slotsMessage.classList.toggle('stale', stale);
     const legend = Object.assign(document.createElement('div'), { className: 'legend' });
     legend.append(Object.assign(document.createElement('span'), { className: 'l-free', textContent: 'Free' }), Object.assign(document.createElement('span'), { className: 'l-busy', textContent: 'Booked or closed' }));
     slotList.replaceChildren(legend, ...result.courts.map(court => {
@@ -220,9 +223,11 @@ async function initialize() {
     slotForm.hidden = false;
   }
 
+  // Live read through the function takes about a second; it falls back to the last saved times.
   async function showSavedAvailability() {
     try {
-      renderAvailability(await getJson(`slots=${slotDate.value}`));
+      showMessage(slotsMessage, 'Loading free times from EMS…');
+      renderAvailability(await getJson(`slots=${slotDate.value}&live=1`));
     } catch (error) {
       showMessage(slotsMessage, error instanceof Error ? error.message : 'Could not load free times.', true);
     }
@@ -247,6 +252,9 @@ async function initialize() {
     setBusy(true);
     try {
       const date = slotDate.value;
+      const live = await getJson(`slots=${date}&live=1`);
+      if (live.live) return renderAvailability(live);
+      // The direct read failed (e.g. EMS needs a fresh sign-in); a GitHub run can sign in again.
       const requestedAt = await startRun({ action: 'slots', date });
       const result = await waitFor(async () => {
         const saved = await getJson(`slots=${date}`);

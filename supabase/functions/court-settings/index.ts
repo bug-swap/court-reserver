@@ -1,9 +1,17 @@
+import { courtAvailability } from '../../../src/availability.mjs';
+
 const projectUrl = Deno.env.get('SUPABASE_URL')?.replace(/\/$/, '');
 const serviceKey = Deno.env.get('COURT_SUPABASE_SERVICE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const siteOrigin = 'https://bug-swap.github.io';
 // Fine-grained token limited to Actions: write on bug-swap/court-reserver.
 const githubToken = Deno.env.get('COURT_GITHUB_TOKEN');
 const workflowUrl = 'https://api.github.com/repos/bug-swap/court-reserver/actions/workflows/reserve.yml/dispatches';
+// Same key as the runner's STATE_KEY, so this function can read the saved EMS session.
+const stateKey = Deno.env.get('COURT_STATE_KEY');
+const emsOrigin = 'https://ems.colorado.edu';
+const courtUrl = `${emsOrigin}/RoomRequest.aspx?data=ity3Dem%2ByxxGFZTQvNr975iYyqy0fdZA`;
+const courtTemplateId = 355;
+const browserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': siteOrigin,
@@ -101,6 +109,94 @@ async function writeSettings(settings: { sport: string; startTime: string; badmi
   if (!response.ok) throw new Error(`Could not save settings (HTTP ${response.status}).`);
 }
 
+// Mirrors src/crypto.mjs: base64("CR1" | 12-byte IV | 16-byte tag | AES-256-GCM ciphertext).
+async function decryptState(encoded: string) {
+  if (!stateKey || !/^[0-9a-f]{64}$/i.test(stateKey)) throw new Error('Live EMS times are not configured yet (COURT_STATE_KEY is missing).');
+  const payload = Uint8Array.from(atob(encoded.trim()), c => c.charCodeAt(0));
+  if (new TextDecoder().decode(payload.subarray(0, 3)) !== 'CR1') throw new Error('Saved EMS session is unreadable.');
+  const keyBytes = Uint8Array.from(stateKey.match(/../g)!.map(byte => parseInt(byte, 16)));
+  const key = await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['decrypt']);
+  const sealed = new Uint8Array([...payload.subarray(31), ...payload.subarray(15, 31)]);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: payload.subarray(3, 15) }, key, sealed);
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+function denverClock() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date()).map(part => [part.type, part.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+
+// Reads free court times straight from EMS's JSON API with the session the runner keeps signed in.
+async function liveAvailability(date: string) {
+  const [session] = await rows('court_session?select=encrypted_state&id=eq.1');
+  if (!session) throw new Error('No saved EMS session yet.');
+  const state = await decryptState(session.encrypted_state);
+  const cookies = new Map<string, string>(state.browserState.cookies
+    .filter((cookie: { domain: string }) => cookie.domain.replace(/^\./, '') === 'ems.colorado.edu')
+    .map((cookie: { name: string; value: string }) => [cookie.name, cookie.value]));
+  const cookieHeader = () => [...cookies].map(([name, value]) => `${name}=${value}`).join('; ');
+
+  const page = await fetch(courtUrl, { headers: { cookie: cookieHeader(), 'user-agent': browserAgent }, redirect: 'manual', signal: AbortSignal.timeout(10000) });
+  for (const line of page.headers.getSetCookie()) {
+    const [pair] = line.split(';');
+    const split = pair.indexOf('=');
+    cookies.set(pair.slice(0, split).trim(), pair.slice(split + 1));
+  }
+  const csrf = (await page.text()).match(/id="deaCSRFToken" value="([^"]+)"/)?.[1];
+  if (page.status !== 200 || !csrf) throw new Error('The saved EMS session has expired.');
+
+  const api = async (method: string, body: unknown) => {
+    const response = await fetch(`${emsOrigin}/ServerApi.aspx/${method}`, {
+      method: 'POST',
+      headers: {
+        cookie: cookieHeader(), 'user-agent': browserAgent, 'content-type': 'application/json; charset=UTF-8',
+        'x-requested-with': 'XMLHttpRequest', 'dea-csrftoken': csrf, origin: emsOrigin, referer: courtUrl
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) throw new Error(`EMS ${method} failed (HTTP ${response.status}).`);
+    return JSON.parse((await response.json()).d);
+  };
+  const filters = [
+    { filterName: 'Locations', value: '-1', displayValue: '(all)', filterType: 8 },
+    { filterName: 'StartDate', value: `${date} 00:00:00`, displayValue: null, filterType: 3 },
+    { filterName: 'EndDate', value: `${date} 23:59:59`, filterType: 3, displayValue: null },
+    { filterName: 'TimeZone', value: 68, displayValue: 'Mountain Time', filterType: 2 }
+  ];
+  const rooms = await api('GetBrowseLocationsRoomsForRoomRequest', {
+    templateId: courtTemplateId,
+    searchData: {
+      TemplateId: courtTemplateId, Start: `${date} 09:00:00`, End: `${date} 10:00:00`, Dates: [`${date} 00:00:00`], DatesGmt: null,
+      TimeZoneId: 68, FilterType: 0, IsPam: false, BookingId: -1, IsVCEdit: false, RoomName: null, FavoritesOnly: false, PageMode: null, Cart: []
+    },
+    filterData: { filters }
+  });
+  if (!rooms.CanBook) throw new Error('The saved EMS session has expired.');
+  const roomIds = rooms.Buildings.flatMap((building: { Rooms: { Id: number }[] }) => building.Rooms.map(room => room.Id)).join(',');
+  const bookings = await api('GetBrowseLocationsBookingsForRoomRequest', {
+    templateId: courtTemplateId,
+    filterData: { filters: [...filters, { filterName: 'Rooms', value: roomIds, displayValue: null, filterType: 7 }] }
+  });
+  const now = denverClock();
+  const courts = courtAvailability(rooms, bookings, date, date === now.date ? now.time : '00:00');
+  const fetchedAt = new Date().toISOString();
+  await saveAvailability(date, courts, fetchedAt);
+  return { courts, fetchedAt, live: true };
+}
+
+async function saveAvailability(date: string, courts: unknown, fetchedAt: string) {
+  const authHeaders = serviceKey!.split('.').length === 3 ? { Authorization: `Bearer ${serviceKey}` } : {};
+  await fetch(`${projectUrl}/rest/v1/court_availability?on_conflict=target_date`, {
+    method: 'POST',
+    headers: { apikey: serviceKey!, ...authHeaders, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ target_date: date, courts, fetched_at: fetchedAt }),
+    signal: AbortSignal.timeout(10000)
+  });
+}
+
 // EMS takes bookings for today and tomorrow only.
 function bookableDates() {
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver' }).format(new Date());
@@ -153,6 +249,15 @@ Deno.serve(async request => {
       const slotsDate = params.get('slots');
       if (slotsDate) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(slotsDate)) return json({ error: 'Invalid date.' }, 400);
+        if (params.has('live')) {
+          if (!bookableDates().includes(slotsDate)) return json({ error: 'Choose today or tomorrow.' }, 400);
+          try {
+            return json(await liveAvailability(slotsDate));
+          } catch (error) {
+            const [row] = await rows(`court_availability?select=courts,fetched_at&target_date=eq.${slotsDate}`);
+            return json({ courts: row?.courts ?? null, fetchedAt: row?.fetched_at ?? null, live: false, liveError: error instanceof Error ? error.message : 'EMS could not be reached.' });
+          }
+        }
         const [row] = await rows(`court_availability?select=courts,fetched_at&target_date=eq.${slotsDate}`);
         return json(row ? { courts: row.courts, fetchedAt: row.fetched_at } : { courts: null, fetchedAt: null });
       }
