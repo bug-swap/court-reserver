@@ -132,27 +132,100 @@ async function initialize() {
     return Date.now();
   }
 
-  function timeline(court) {
-    const bar = document.createElement('div');
-    const axis = document.createElement('div');
-    bar.className = 'timeline';
-    axis.className = 'axis';
-    const open = toMinutes(court.open);
-    const span = toMinutes(court.close) - open;
-    for (const opening of court.openings) {
-      const free = document.createElement('div');
-      free.className = 'free';
-      free.style.left = `${(toMinutes(opening.start) - open) / span * 100}%`;
-      free.style.width = `${(toMinutes(opening.end) - toMinutes(opening.start)) / span * 100}%`;
-      free.title = `Free ${timeLabel(opening.start)}–${timeLabel(opening.end)}`;
-      bar.append(free);
+  function daySpan(courts) {
+    const openCourts = courts.filter(court => court.open);
+    const dayStart = Math.min(...openCourts.map(court => toMinutes(court.open)));
+    return { dayStart, span: Math.max(...openCourts.map(court => toMinutes(court.close))) - dayStart };
+  }
+
+  // Sideways day view: hours across the top, one short row per court, free time in green.
+  function dayCalendar(courts) {
+    const { dayStart, span } = daySpan(courts);
+    const x = time => `${(time - dayStart) / span * 100}%`;
+    const width = slotList.clientWidth || 700;
+    const labelEvery = width < 520 ? 180 : width < 820 ? 120 : 60;
+    const calendar = Object.assign(document.createElement('div'), { className: 'hcal' });
+    const axis = Object.assign(document.createElement('div'), { className: 'hcal-axis' });
+    const gridTimes = [];
+    for (let time = Math.ceil(dayStart / 60) * 60; time < dayStart + span; time += 60) gridTimes.push(time);
+    for (const time of gridTimes.filter(time => (time - gridTimes[0]) % labelEvery === 0)) {
+      const label = Object.assign(document.createElement('span'), { textContent: timeLabel(toClock(time)).replace(':00', '') });
+      label.style.left = x(time);
+      axis.append(label);
     }
-    axis.append(...[court.open, toClock(open + Math.round(span / 2 / 60) * 60), court.close].map(time => Object.assign(document.createElement('span'), { textContent: timeLabel(time) })));
-    bar.setAttribute('role', 'img');
-    bar.setAttribute('aria-label', court.openings.length
-      ? `Free ${court.openings.map(o => `${timeLabel(o.start)} to ${timeLabel(o.end)}`).join(', ')}`
-      : 'No free time');
-    return [bar, axis];
+    calendar.append(Object.assign(document.createElement('span'), { className: 'hcal-corner' }), axis);
+    courts.forEach((court, index) => {
+      const name = Object.assign(document.createElement('span'), { className: 'hcal-name', textContent: court.sport === 'squash' ? 'Squash' : `Badminton ${court.room}` });
+      const track = Object.assign(document.createElement('div'), { className: 'hcal-track' });
+      track.dataset.court = String(index);
+      for (const time of gridTimes) {
+        const line = Object.assign(document.createElement('i'), { className: time % labelEvery === gridTimes[0] % labelEvery ? 'major' : '' });
+        line.style.left = x(time);
+        track.append(line);
+      }
+      for (const opening of court.openings) {
+        const free = document.createElement('button');
+        free.type = 'button';
+        free.className = 'hcal-free';
+        free.style.left = x(toMinutes(opening.start));
+        free.style.width = `${(toMinutes(opening.end) - toMinutes(opening.start)) / span * 100}%`;
+        free.title = `Free ${timeLabel(opening.start)}–${timeLabel(opening.end)}`;
+        free.setAttribute('aria-label', `${courtLabel(court)} free ${timeLabel(opening.start)} to ${timeLabel(opening.end)}`);
+        free.append(Object.assign(document.createElement('span'), { textContent: `${timeLabel(opening.start)}–${timeLabel(opening.end)}` }));
+        free.addEventListener('click', event => {
+          // Snap the tapped point to a 15-minute start that still fits before the window ends.
+          const fraction = event.offsetX && free.clientWidth ? event.offsetX / free.clientWidth : 0;
+          const tapped = toMinutes(opening.start) + fraction * (toMinutes(opening.end) - toMinutes(opening.start));
+          const snapped = Math.min(Math.max(Math.floor(tapped / 15) * 15, toMinutes(opening.start)), toMinutes(opening.lastStart));
+          chooseStart(index, toClock(snapped));
+        });
+        track.append(free);
+      }
+      calendar.append(name, track);
+    });
+    const picked = Object.assign(document.createElement('div'), { className: 'hcal-picked', id: 'hcal-picked' });
+    const wrapper = document.createElement('div');
+    wrapper.append(calendar, picked);
+    return wrapper;
+  }
+
+  function markSelection() {
+    for (const old of slotList.querySelectorAll('.hcal-pick')) old.remove();
+    const picked = slotList.querySelector('#hcal-picked');
+    const court = availability.courts?.[Number(slotCourt.value)];
+    const track = slotList.querySelector(`.hcal-track[data-court="${slotCourt.value}"]`);
+    if (!picked) return;
+    if (!court || !track || !slotStart.value) {
+      picked.textContent = 'Tap a green block to choose when to start.';
+      return;
+    }
+    const { dayStart, span } = daySpan(availability.courts);
+    const startAt = toMinutes(slotStart.value);
+    const pick = Object.assign(document.createElement('div'), { className: 'hcal-pick' });
+    pick.style.left = `${(startAt - dayStart) / span * 100}%`;
+    pick.style.width = `${60 / span * 100}%`;
+    const teardown = Object.assign(document.createElement('div'), { className: 'hcal-pick teardown' });
+    teardown.style.left = `${(startAt + 60 - dayStart) / span * 100}%`;
+    teardown.style.width = `${15 / span * 100}%`;
+    track.append(pick, teardown);
+    const options = [...slotStart.options].map(option => option.value);
+    const at = options.indexOf(slotStart.value);
+    const nudge = (step, text) => {
+      const button = Object.assign(document.createElement('button'), { type: 'button', className: 'secondary nudge', textContent: text });
+      button.disabled = !options[at + step];
+      button.addEventListener('click', () => chooseStart(Number(slotCourt.value), options[at + step]));
+      return button;
+    };
+    const label = Object.assign(document.createElement('strong'), {
+      textContent: `${courtLabel(court)}, ${timeLabel(slotStart.value)}–${timeLabel(toClock(startAt + 60))}`
+    });
+    picked.replaceChildren(nudge(-1, '− 15 min'), label, nudge(1, '+ 15 min'));
+  }
+
+  function chooseStart(courtIndex, time) {
+    slotCourt.value = String(courtIndex);
+    fillStartTimes(time);
+    showConfirm(false);
   }
 
   function startOptions(court) {
@@ -168,10 +241,10 @@ async function initialize() {
     slotReview.hidden = visible;
   }
 
-  function fillStartTimes() {
+  function fillStartTimes(chosen) {
     const court = availability.courts?.[Number(slotCourt.value)];
     const options = court ? startOptions(court) : [];
-    const preferred = toMinutes(start.value || '18:00');
+    const preferred = toMinutes(typeof chosen === 'string' ? chosen : start.value || '18:00');
     const closest = options.reduce((best, time) => best === null || Math.abs(toMinutes(time) - preferred) < Math.abs(toMinutes(best) - preferred) ? time : best, null);
     slotStart.replaceChildren(...options.map(time => {
       const [hour, minute] = time.split(':').map(Number);
@@ -179,6 +252,7 @@ async function initialize() {
     }));
     slotReview.disabled = !options.length;
     showConfirm(false);
+    markSelection();
   }
 
   function renderAvailability(result) {
@@ -201,20 +275,15 @@ async function initialize() {
         : `Saved at ${checked}${result.liveError ? ` (${result.liveError})` : ''}. Booking re-checks EMS.`);
     slotsMessage.classList.toggle('stale', stale);
     const legend = Object.assign(document.createElement('div'), { className: 'legend' });
-    legend.append(Object.assign(document.createElement('span'), { className: 'l-free', textContent: 'Free' }), Object.assign(document.createElement('span'), { className: 'l-busy', textContent: 'Booked or closed' }));
-    slotList.replaceChildren(legend, ...result.courts.map(court => {
-      const group = document.createElement('div');
-      const heading = Object.assign(document.createElement('h3'), { textContent: courtLabel(court) });
-      const windows = Object.assign(document.createElement('p'), { className: 'windows' });
-      windows.textContent = !court.open
-        ? 'Closed all day.'
-        : court.openings.length
-          ? court.openings.map(o => `${timeLabel(o.start)}–${timeLabel(o.end)} (start by ${timeLabel(o.lastStart)})`).join(' · ')
-          : 'No free hour left.';
-      group.className = 'slot-group';
-      group.append(heading, ...(court.open ? timeline(court) : []), windows);
-      return group;
-    }));
+    legend.append(
+      Object.assign(document.createElement('span'), { className: 'l-free', textContent: 'Free: tap where you want to start' }),
+      Object.assign(document.createElement('span'), { className: 'l-pick', textContent: 'Your hour' }),
+      Object.assign(document.createElement('span'), { className: 'l-tear', textContent: '15-min teardown' }),
+      Object.assign(document.createElement('span'), { className: 'l-busy', textContent: 'Booked or closed' })
+    );
+    slotList.replaceChildren(legend, result.courts.some(court => court.open)
+      ? dayCalendar(result.courts)
+      : Object.assign(document.createElement('p'), { className: 'hint', textContent: 'The courts are closed all day.' }));
     const previous = slotCourt.value;
     slotCourt.replaceChildren(...result.courts.map((court, index) => new Option(`${courtLabel(court)}${court.openings.length ? '' : ' (full)'}`, String(index))));
     const preferredIndex = result.courts.findIndex(court => court.sport === sport.value && court.openings.length);
@@ -274,7 +343,7 @@ async function initialize() {
   });
 
   slotCourt.addEventListener('change', fillStartTimes);
-  slotStart.addEventListener('change', () => showConfirm(false));
+  slotStart.addEventListener('change', () => { showConfirm(false); markSelection(); });
 
   slotForm.addEventListener('submit', event => {
     event.preventDefault();
