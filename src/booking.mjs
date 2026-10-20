@@ -154,10 +154,16 @@ export async function checkSignedIn(page) {
   await page.goto(EMS_URL, { waitUntil: 'domcontentloaded' });
   const reservationLinks = page.locator('a[href*="BrowseReservations.aspx"], a[href*="RoomRequest.aspx"]');
   await reservationLinks.first().waitFor({ state: 'attached', timeout: 15000 }).catch(() => {});
+  const signIn = page.getByRole('button', { name: /^sign in$/i });
+  if (await signIn.isVisible().catch(() => false)) {
+    // emsAuthToken only lasts hours; the shared CU SSO cookies can sign EMS back in without a prompt.
+    await signIn.click();
+    await reservationLinks.first().waitFor({ state: 'attached', timeout: 45000 }).catch(() => {});
+  }
   const location = new URL(page.url());
   const safeLocation = `${location.hostname}${location.pathname}`;
-  if (await page.getByRole('button', { name: /^sign in$/i }).isVisible().catch(() => false)) {
-    throw new Error(`EMS session requires sign-in at ${safeLocation}. Run npm run login again.`);
+  if (location.origin !== new URL(EMS_URL).origin || await signIn.isVisible().catch(() => false)) {
+    throw new Error(`EMS session requires sign-in at ${safeLocation}. CU SSO expired; run canvas-emailer's login (or npm run login) again.`);
   }
   if (await reservationLinks.count() === 0) {
     throw new Error(`EMS signed-in home page could not be verified at ${safeLocation}.`);

@@ -4,8 +4,8 @@ import nodemailer from 'nodemailer';
 import { bookCourt, keepAlive } from './booking.mjs';
 import { decryptState, encryptState } from './crypto.mjs';
 import { endTime, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
-import { hasBooking, loadSession, loadSettings, logRun, saveBooking, saveSession, saveSettings } from './supabase.mjs';
-import { captureBrowserState, restoreSessionStorage } from './browser-state.mjs';
+import { hasBooking, loadCanvasSession, loadSession, loadSettings, logRun, saveBooking, saveSession, saveSettings } from './supabase.mjs';
+import { captureBrowserState, restoreSessionStorage, withSsoCookies } from './browser-state.mjs';
 
 const date = targetDate();
 const requestedMode = process.env.MODE || 'auto';
@@ -41,7 +41,11 @@ if (mode === 'book') {
 }
 
 const browser = await chromium.launch({ headless: process.env.HEADLESS !== 'false' });
-const context = await browser.newContext({ storageState: state.browserState });
+const canvasSession = await loadCanvasSession().catch(caught => {
+  console.error(`Shared CU SSO cookies unavailable: ${caught.message}`);
+  return { cookies: [] };
+});
+const context = await browser.newContext({ storageState: withSsoCookies(state.browserState, canvasSession.cookies) });
 await restoreSessionStorage(context, state.sessionStorage);
 const page = await context.newPage();
 let result;

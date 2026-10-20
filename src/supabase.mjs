@@ -44,6 +44,17 @@ export async function saveSession(encryptedState) {
   await upsert('court_session', { id: 1, encrypted_state: encryptedState, refreshed_at: new Date().toISOString() }, 'id');
 }
 
+// canvas-emailer keeps this Storage object fresh; its CU SSO cookies also sign in to EMS.
+export async function loadCanvasSession() {
+  requireConnection();
+  const response = await fetch(`${baseUrl}/storage/v1/object/canvas-session/session.json`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+    signal: AbortSignal.timeout(30000)
+  });
+  if (!response.ok) throw new Error(`Supabase GET canvas-session/session.json failed (HTTP ${response.status})`);
+  return response.json();
+}
+
 export async function loadSettings() {
   return row('court_settings', 'select=sport,start_time,badminton_room&id=eq.1');
 }
