@@ -5,11 +5,12 @@
     .eyebrow{text-transform:uppercase;letter-spacing:.15em;font-size:.75rem;font-weight:800;color:#6a5c31}
     .card{background:#fff;border:1px solid #e5e1d6;border-radius:20px;padding:28px;box-shadow:0 16px 40px #3333220a}
     .field{margin:20px 0}.field>label,.field>span{display:block;font-weight:700;margin-bottom:8px}
-    select,input[type=time],input[type=text],input[type=password]{width:100%;min-height:48px;padding:10px 13px;border:1px solid #bdb8a9;border-radius:10px;background:#fff;color:#25251f;font:inherit}
+    select,input[type=time],input[type=text],input[type=email]{width:100%;min-height:48px;padding:10px 13px;border:1px solid #bdb8a9;border-radius:10px;background:#fff;color:#25251f;font:inherit}
     select:focus,input:focus,button:focus{outline:3px solid #b4d4c0;outline-offset:2px}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.hint{font-size:.88rem;margin-top:7px;color:#69675f}
     .summary{background:#f1f6f0;border:1px solid #d7e8d9;border-radius:12px;padding:14px 16px;margin:22px 0;color:#254b31}
     button{border:0;border-radius:11px;background:#17633d;color:#fff;font:700 1rem system-ui;padding:14px 22px;cursor:pointer}
     button:hover{background:#0f4e2d}button:disabled{opacity:.6;cursor:wait}.actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     a{color:#17633d}footer{margin-top:22px;font-size:.88rem;color:#68675f}#message{margin-top:16px;color:#254b31}#message.error{color:#9a361e}
+    .auth-card{margin-top:28px;padding-top:24px;border-top:1px solid #e5e1d6}.auth-card p{margin-bottom:12px}#auth-message{margin-top:12px;color:#254b31}#auth-message.error{color:#9a361e}
     #room-field[hidden]{display:none}@media(max-width:560px){.grid{grid-template-columns:1fr;gap:0}.card{padding:22px}}

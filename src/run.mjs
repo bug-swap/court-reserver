@@ -14,8 +14,16 @@ if (!['book', 'keepalive', 'dry-run'].includes(mode)) throw new Error('MODE must
 const encrypted = await loadSession() || process.env.EMS_INITIAL_STATE ||
   await readFile('initial-state.txt', 'utf8').catch(() => { throw new Error('No EMS session in Supabase. Run npm run login to capture one.'); });
 const state = decryptState(encrypted);
-const settings = JSON.parse(await readFile('site/config.json', 'utf8'));
-await saveSettings(settings);
+const initialSettings = JSON.parse(await readFile('site/config.json', 'utf8'));
+const storedSettings = await loadSettings();
+const settings = storedSettings
+  ? {
+      sport: storedSettings.sport,
+      startTime: storedSettings.start_time,
+      badmintonRoom: storedSettings.badminton_room
+    }
+  : initialSettings;
+if (!storedSettings) await saveSettings(settings);
 const sport = requestedSport(process.env.SPORT || settings.sport);
 const startTime = requestedTime(process.env.START_TIME || settings.startTime);
 const badmintonRoom = requestedRoom(process.env.BADMINTON_ROOM || settings.badmintonRoom);
