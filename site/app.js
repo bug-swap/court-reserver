@@ -138,28 +138,40 @@ async function initialize() {
     return { dayStart, span: Math.max(...openCourts.map(court => toMinutes(court.close))) - dayStart };
   }
 
+  const MOBILE_PX_PER_HOUR = 64;
+
   // Sideways day view: hours across the top, one short row per court, free time in green.
+  // Narrow screens scroll the hours sideways at a readable scale with court names pinned.
   function dayCalendar(courts) {
     const { dayStart, span } = daySpan(courts);
     const x = time => `${(time - dayStart) / span * 100}%`;
     const width = slotList.clientWidth || 700;
-    const labelEvery = width < 520 ? 180 : width < 820 ? 120 : 60;
-    const calendar = Object.assign(document.createElement('div'), { className: 'hcal' });
-    const axis = Object.assign(document.createElement('div'), { className: 'hcal-axis' });
+    const scrolls = width < 700;
+    const labelEvery = scrolls || width >= 820 ? 60 : 120;
     const gridTimes = [];
     for (let time = Math.ceil(dayStart / 60) * 60; time < dayStart + span; time += 60) gridTimes.push(time);
+
+    const names = Object.assign(document.createElement('div'), { className: 'hcal-names' });
+    names.append(Object.assign(document.createElement('span'), { className: 'hcal-corner' }));
+    const scroller = Object.assign(document.createElement('div'), { className: 'hcal-scroll' });
+    const inner = Object.assign(document.createElement('div'), { className: 'hcal-inner' });
+    if (scrolls) inner.style.width = `${span / 60 * MOBILE_PX_PER_HOUR}px`;
+    const axis = Object.assign(document.createElement('div'), { className: 'hcal-axis' });
     for (const time of gridTimes.filter(time => (time - gridTimes[0]) % labelEvery === 0)) {
       const label = Object.assign(document.createElement('span'), { textContent: timeLabel(toClock(time)).replace(':00', '') });
       label.style.left = x(time);
       axis.append(label);
     }
-    calendar.append(Object.assign(document.createElement('span'), { className: 'hcal-corner' }), axis);
+    inner.append(axis);
     courts.forEach((court, index) => {
-      const name = Object.assign(document.createElement('span'), { className: 'hcal-name', textContent: court.sport === 'squash' ? 'Squash' : `Badminton ${court.room}` });
+      names.append(Object.assign(document.createElement('span'), {
+        className: 'hcal-name',
+        textContent: court.sport === 'squash' ? 'Squash' : scrolls ? court.room : `Badminton ${court.room}`
+      }));
       const track = Object.assign(document.createElement('div'), { className: 'hcal-track' });
       track.dataset.court = String(index);
       for (const time of gridTimes) {
-        const line = Object.assign(document.createElement('i'), { className: time % labelEvery === gridTimes[0] % labelEvery ? 'major' : '' });
+        const line = Object.assign(document.createElement('i'), { className: (time - gridTimes[0]) % labelEvery === 0 ? 'major' : '' });
         line.style.left = x(time);
         track.append(line);
       }
@@ -181,12 +193,25 @@ async function initialize() {
         });
         track.append(free);
       }
-      calendar.append(name, track);
+      inner.append(track);
     });
+    scroller.append(inner);
+    const calendar = Object.assign(document.createElement('div'), { className: 'hcal' });
+    calendar.append(names, scroller);
     const picked = Object.assign(document.createElement('div'), { className: 'hcal-picked', id: 'hcal-picked' });
     const wrapper = document.createElement('div');
     wrapper.append(calendar, picked);
+    if (scrolls) wrapper.append(Object.assign(document.createElement('p'), { className: 'hint hcal-swipe', textContent: 'Swipe the calendar sideways for other hours.' }));
     return wrapper;
+  }
+
+  // Keep the chosen hour in view when the calendar scrolls sideways.
+  function scrollToSelection() {
+    const scroller = slotList.querySelector('.hcal-scroll');
+    const pick = slotList.querySelector('.hcal-pick');
+    if (!scroller || !pick || scroller.scrollWidth <= scroller.clientWidth) return;
+    const target = pick.offsetLeft - (scroller.clientWidth - pick.offsetWidth) / 2;
+    scroller.scrollLeft = Math.max(0, target);
   }
 
   function markSelection() {
@@ -210,8 +235,9 @@ async function initialize() {
     track.append(pick, teardown);
     const options = [...slotStart.options].map(option => option.value);
     const at = options.indexOf(slotStart.value);
-    const nudge = (step, text) => {
+    const nudge = (step, text, name) => {
       const button = Object.assign(document.createElement('button'), { type: 'button', className: 'secondary nudge', textContent: text });
+      button.setAttribute('aria-label', name);
       button.disabled = !options[at + step];
       button.addEventListener('click', () => chooseStart(Number(slotCourt.value), options[at + step]));
       return button;
@@ -219,13 +245,14 @@ async function initialize() {
     const label = Object.assign(document.createElement('strong'), {
       textContent: `${courtLabel(court)}, ${timeLabel(slotStart.value)}–${timeLabel(toClock(startAt + 60))}`
     });
-    picked.replaceChildren(nudge(-1, '− 15 min'), label, nudge(1, '+ 15 min'));
+    picked.replaceChildren(nudge(-1, '−15', '15 minutes earlier'), label, nudge(1, '+15', '15 minutes later'));
   }
 
   function chooseStart(courtIndex, time) {
     slotCourt.value = String(courtIndex);
     fillStartTimes(time);
     showConfirm(false);
+    scrollToSelection();
   }
 
   function startOptions(court) {
@@ -246,10 +273,7 @@ async function initialize() {
     const options = court ? startOptions(court) : [];
     const preferred = toMinutes(typeof chosen === 'string' ? chosen : start.value || '18:00');
     const closest = options.reduce((best, time) => best === null || Math.abs(toMinutes(time) - preferred) < Math.abs(toMinutes(best) - preferred) ? time : best, null);
-    slotStart.replaceChildren(...options.map(time => {
-      const [hour, minute] = time.split(':').map(Number);
-      return new Option(`${timeLabel(time)}–${timeLabel(toClock(hour * 60 + minute + 60))}`, time, false, time === closest);
-    }));
+    slotStart.replaceChildren(...options.map(time => new Option(timeLabel(time), time, false, time === closest)));
     slotReview.disabled = !options.length;
     showConfirm(false);
     markSelection();
@@ -276,20 +300,21 @@ async function initialize() {
     slotsMessage.classList.toggle('stale', stale);
     const legend = Object.assign(document.createElement('div'), { className: 'legend' });
     legend.append(
-      Object.assign(document.createElement('span'), { className: 'l-free', textContent: 'Free: tap where you want to start' }),
+      Object.assign(document.createElement('span'), { className: 'l-free', textContent: 'Free (tap to pick)' }),
       Object.assign(document.createElement('span'), { className: 'l-pick', textContent: 'Your hour' }),
-      Object.assign(document.createElement('span'), { className: 'l-tear', textContent: '15-min teardown' }),
-      Object.assign(document.createElement('span'), { className: 'l-busy', textContent: 'Booked or closed' })
+      Object.assign(document.createElement('span'), { className: 'l-tear', textContent: 'Teardown' }),
+      Object.assign(document.createElement('span'), { className: 'l-busy', textContent: 'Booked' })
     );
     slotList.replaceChildren(legend, result.courts.some(court => court.open)
       ? dayCalendar(result.courts)
       : Object.assign(document.createElement('p'), { className: 'hint', textContent: 'The courts are closed all day.' }));
     const previous = slotCourt.value;
-    slotCourt.replaceChildren(...result.courts.map((court, index) => new Option(`${courtLabel(court)}${court.openings.length ? '' : ' (full)'}`, String(index))));
+    slotCourt.replaceChildren(...result.courts.map((court, index) => new Option(`${court.sport === 'squash' ? 'Squash' : `Badminton ${court.room}`}${court.openings.length ? '' : ' (full)'}`, String(index))));
     const preferredIndex = result.courts.findIndex(court => court.sport === sport.value && court.openings.length);
     slotCourt.value = previous && result.courts[Number(previous)] ? previous : String(Math.max(preferredIndex, 0));
     fillStartTimes();
     slotForm.hidden = false;
+    scrollToSelection();
   }
 
   // Live read through the function takes about a second; it falls back to the last saved times.
@@ -348,7 +373,7 @@ async function initialize() {
   slotForm.addEventListener('submit', event => {
     event.preventDefault();
     const court = availability.courts[Number(slotCourt.value)];
-    slotConfirmText.textContent = `Book ${courtLabel(court)} on ${dayLabel(slotDate.value)}, ${slotStart.selectedOptions[0].textContent} Mountain time?`;
+    slotConfirmText.textContent = `Book ${courtLabel(court)} on ${dayLabel(slotDate.value)}, ${timeLabel(slotStart.value)}–${timeLabel(toClock(toMinutes(slotStart.value) + 60))} Mountain time?`;
     showConfirm(true);
   });
 
@@ -382,8 +407,8 @@ async function initialize() {
   const [year, month, day] = today.split('-').map(Number);
   const tomorrow = new Date(Date.UTC(year, month - 1, day + 1, 12)).toISOString().slice(0, 10);
   slotDate.replaceChildren(
-    new Option(`Tomorrow, ${dayLabel(tomorrow)}`, tomorrow),
-    new Option(`Today, ${dayLabel(today)}`, today)
+    new Option(`Tomorrow (${tomorrow.slice(5).replace('-', '/')})`, tomorrow),
+    new Option(`Today (${today.slice(5).replace('-', '/')})`, today)
   );
   slotDate.addEventListener('change', showSavedAvailability);
 

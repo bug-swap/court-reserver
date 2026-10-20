@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://ahtzxstwbzovefgmbpfp.supabase.co; base-uri 'none'; form-action 'none'">
   <title>CU Court Reserver</title>
-  <link rel="stylesheet" href="./style.css?v=10">
+  <link rel="stylesheet" href="./style.css?v=14">
 </head>
 <body>
   <main>
@@ -16,8 +16,8 @@
     </header>
     <section class="card" aria-labelledby="slots-heading">
       <h2 id="slots-heading">Book a court now</h2>
-      <p>Free times load live from EMS. Book any start time that fits: a booking is 60 minutes, and EMS keeps the 15 minutes after it free for teardown. Booking itself runs through GitHub and takes about a minute.</p>
-      <div class="actions">
+      <p>Live free times from EMS. Pick any start: bookings are 60 minutes plus 15 minutes of teardown. Booking takes about a minute.</p>
+      <div class="slot-controls">
         <select id="slot-date" aria-label="Day"></select>
         <button id="get-slots" type="button" class="secondary">Refresh</button>
       </div>
@@ -76,6 +76,6 @@
     </div>
     <footer>Settings are saved privately in Supabase. The booking runs through GitHub Actions. <a href="https://ems.colorado.edu/">Open CU EMS</a>.</footer>
   </main>
-  <script src="./app.js?v=10" defer></script>
+  <script src="./app.js?v=14" defer></script>
 </body>
 </html>

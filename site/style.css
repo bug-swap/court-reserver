@@ -21,19 +21,24 @@
     button.secondary{background:#fff;color:#17633d;border:1px solid #b9d3c1;font-weight:600}button.secondary:hover{background:#f1f6f0}
     .legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:.8rem;color:#69675f;margin:14px 0 10px}.legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px}
     .legend .l-free::before{background:#cfe8d6;border:1px solid #4f9d6b}.legend .l-tear::before{background:repeating-linear-gradient(135deg,#17633d88 0 3px,#17633d33 3px 6px)}.legend .l-pick::before{background:#17633d}.legend .l-busy::before{background:repeating-linear-gradient(135deg,#e2ddd0 0 3px,#f1eee7 3px 6px)}
-    .hcal{display:grid;grid-template-columns:92px 1fr;row-gap:6px;align-items:center}
-    .hcal-axis{position:relative;height:18px}.hcal-axis span{position:absolute;transform:translateX(-50%);font-size:.75rem;color:#69675f;white-space:nowrap}
-    .hcal-name{font-weight:700;font-size:.85rem;padding-right:8px}
+    .hcal{display:flex;gap:8px}.hcal-names{display:flex;flex-direction:column;gap:6px;flex:none;width:92px}
+    .hcal-corner{height:18px}.hcal-name{height:40px;display:flex;align-items:center;font-weight:700;font-size:.85rem}
+    .hcal-scroll{flex:1;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+    .hcal-inner{display:flex;flex-direction:column;gap:6px;min-width:100%;padding-bottom:4px}
+    .hcal-axis{position:relative;height:18px}.hcal-axis span{position:absolute;transform:translateX(-50%);font-size:.75rem;color:#69675f;white-space:nowrap}.hcal-axis span:first-child{transform:none}
     .hcal-track{position:relative;height:40px;border-radius:8px;overflow:hidden;background:repeating-linear-gradient(135deg,#ebe7dc 0 5px,#f5f3ee 5px 10px)}
     .hcal-track i{position:absolute;top:0;bottom:0;border-left:1px solid #00000010;pointer-events:none;z-index:3}.hcal-track i.major{border-left-color:#00000026}
     .hcal-free{position:absolute;top:3px;bottom:3px;padding:0 6px;border:1px solid #4f9d6b;border-radius:6px;background:#cfe8d6;color:#1d4a2d;font:600 .75rem/1 system-ui;cursor:pointer;z-index:1;display:flex;align-items:center;overflow:hidden;white-space:nowrap}
-    .hcal-free:hover{background:#bfe0c8}.hcal-free span{pointer-events:none;overflow:hidden;text-overflow:ellipsis}
+    .hcal-free:hover{background:#bfe0c8}.hcal-free{-webkit-tap-highlight-color:transparent}.hcal-free:focus{outline:none}.hcal-free:focus-visible{outline:3px solid #b4d4c0;outline-offset:1px}
+    .hcal-free span{pointer-events:none;overflow:hidden;text-overflow:ellipsis;position:sticky;left:6px}
     .hcal-pick{position:absolute;top:3px;bottom:3px;background:#17633d;border-radius:5px;z-index:2;pointer-events:none;box-shadow:0 1px 4px #17633d66}
     .hcal-pick.teardown{background:repeating-linear-gradient(135deg,#17633d88 0 3px,#17633d33 3px 6px);box-shadow:none;border-radius:0 5px 5px 0}
-    .hcal-picked{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:14px;color:#254b31;text-align:center}
-    button.nudge{padding:7px 12px;font-size:.85rem}
-    @media(max-width:560px){.hcal{grid-template-columns:70px 1fr}.hcal-name{font-size:.78rem}.hcal-free{font-size:.68rem;padding:0 3px}}
+    .hcal-picked{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px;color:#254b31;text-align:center}
+    button.nudge{padding:8px 12px;font-size:.85rem;flex:none}.hcal-swipe{text-align:center;margin-top:8px}
+    .slot-controls{display:flex;gap:10px}.slot-controls select{flex:1;min-width:0}.slot-controls button{flex:none}
+    @media(max-width:560px){body{padding:20px 12px 56px}.card{padding:18px 14px}.hcal-names{width:44px}.hcal{gap:6px}.hcal-name{font-size:.8rem}.hcal-picked strong{font-size:.92rem}.legend{gap:6px 12px}
+      .slot-form .grid{grid-template-columns:1fr 1fr;gap:10px}.slot-form .field{margin:12px 0}}
     .slot-form{margin-top:22px;padding-top:6px;border-top:1px solid #eeeae0}.slot-form[hidden]{display:none}#slots-message.stale{color:#8a5a12}
     .slot-confirm{background:#f1f6f0;border:1px solid #d7e8d9;border-radius:12px;padding:14px 16px;margin:14px 0}.slot-confirm p{color:#254b31}
     .slot-confirm[hidden]{display:none}
-    #room-field[hidden],#fallback-field[hidden]{display:none}@media(max-width:560px){.grid{grid-template-columns:1fr;gap:0}.card{padding:22px}}
+    #room-field[hidden],#fallback-field[hidden]{display:none}@media(max-width:560px){.grid{grid-template-columns:1fr;gap:0}.card{padding:18px 14px}}
