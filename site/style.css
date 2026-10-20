@@ -16,4 +16,4 @@
     .reservations{list-style:none;margin:0;padding:0}.reservations li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 0;border-top:1px solid #eeeae0}
     .reservations li:first-child{border-top:0}.reservations .when{font-weight:700}.reservations .court{color:#5b5a52}.reservations .empty{color:#69675f;font-size:.92rem}
     #past-reservations li:not(.empty){opacity:.7}
-    #room-field[hidden]{display:none}@media(max-width:560px){.grid{grid-template-columns:1fr;gap:0}.card{padding:22px}}
+    #room-field[hidden],#fallback-field[hidden]{display:none}@media(max-width:560px){.grid{grid-template-columns:1fr;gap:0}.card{padding:22px}}

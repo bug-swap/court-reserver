@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://ahtzxstwbzovefgmbpfp.supabase.co; base-uri 'none'; form-action 'none'">
   <title>CU Court Reserver</title>
-  <link rel="stylesheet" href="./style.css?v=3">
+  <link rel="stylesheet" href="./style.css?v=4">
 </head>
 <body>
   <main>
@@ -18,6 +18,13 @@
       <h2 id="settings-heading">Daily booking</h2>
       <form id="settings-form">
         <div class="field"><label for="sport">Sport</label><select id="sport" name="sport"><option value="squash">Squash</option><option value="badminton">Badminton</option></select></div>
+        <div class="field" id="fallback-field">
+          <label for="squash-fallback">If squash is taken</label>
+          <select id="squash-fallback" name="squashFallback">
+            <option value="none">Don’t book anything; email me the open squash times</option>
+            <option value="badminton">Book the first free badminton court (3C, then 3A, then 3B)</option>
+          </select>
+        </div>
         <div class="field" id="room-field" hidden>
           <label for="badminton-room">Badminton court</label>
           <select id="badminton-room" name="badmintonRoom">
@@ -45,6 +52,6 @@
     </section>
     <footer>Settings are saved privately in Supabase. The booking runs through GitHub Actions. <a href="https://ems.colorado.edu/">Open CU EMS</a>.</footer>
   </main>
-  <script src="./app.js?v=3" defer></script>
+  <script src="./app.js?v=4" defer></script>
 </body>
 </html>

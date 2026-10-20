@@ -38,6 +38,11 @@ export function emsTime(time) {
   return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
 }
 
+export function requestedFallback(value = 'none') {
+  if (!['none', 'badminton'].includes(value)) throw new Error('Squash fallback must be none or badminton');
+  return value;
+}
+
 export function requestedRoom(value = 'any') {
   if (!['any', '3A', '3B', '3C'].includes(value)) throw new Error('Badminton room must be any, 3A, 3B, or 3C');
   return value;

@@ -6,6 +6,7 @@ create table if not exists public.court_settings (
   sport text not null default 'squash' check (sport in ('squash', 'badminton')),
   start_time text not null default '18:00' check (start_time ~ '^(0[0-9]|1[0-9]|2[0-2]):[0-5][0-9]$'),
   badminton_room text not null default 'any' check (badminton_room in ('any', '3A', '3B', '3C')),
+  squash_fallback text not null default 'none' check (squash_fallback in ('none', 'badminton')),
   updated_at timestamptz not null default now()
 );
 

@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import nodemailer from 'nodemailer';
 import { bookCourt, findSquashOpenings, keepAlive, readReservations } from './booking.mjs';
 import { decryptState, encryptState } from './crypto.mjs';
-import { emsTime, endTime, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
+import { emsTime, endTime, requestedFallback, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
 import { hasBooking, loadCanvasSession, loadSession, loadSettings, logRun, saveBooking, saveReservations, saveSession, saveSettings } from './supabase.mjs';
 import { captureBrowserState, restoreSessionStorage, withSsoCookies } from './browser-state.mjs';
 
@@ -20,13 +20,15 @@ const settings = storedSettings
   ? {
       sport: storedSettings.sport,
       startTime: storedSettings.start_time,
-      badmintonRoom: storedSettings.badminton_room
+      badmintonRoom: storedSettings.badminton_room,
+      squashFallback: storedSettings.squash_fallback
     }
   : initialSettings;
 if (!storedSettings) await saveSettings(settings);
 const sport = requestedSport(process.env.SPORT || settings.sport);
 const startTime = requestedTime(process.env.START_TIME || settings.startTime);
 const badmintonRoom = requestedRoom(process.env.BADMINTON_ROOM || settings.badmintonRoom);
+const squashFallback = requestedFallback(process.env.SQUASH_FALLBACK || settings.squashFallback);
 const contact = {
   name: process.env.CONTACT_NAME,
   phone: process.env.CONTACT_PHONE,
@@ -61,7 +63,7 @@ try {
     outcome = 'already_booked';
     console.log(`Already booked ${date}; skipping court selection`);
   } else {
-    result = await bookCourt(page, { date, startTime, sport, badmintonRoom, contact, dryRun: mode === 'dry-run' });
+    result = await bookCourt(page, { date, startTime, sport, badmintonRoom, squashFallback, contact, dryRun: mode === 'dry-run' });
     if (result.submitted) {
       await saveBooking({
         date,
@@ -92,6 +94,10 @@ try {
   outcome = 'failed';
   await page.screenshot({ path: 'failure.png', fullPage: true }).catch(() => {});
   console.error(caught.message);
+  if (mode === 'book' && caught.message.startsWith('Squash is unavailable')) {
+    // No automatic switch to another sport: report free squash times so a new one can be chosen on the settings page.
+    openings = await findSquashOpenings(page, date, startTime).catch(() => undefined);
+  }
 } finally {
   try {
     if (!error) {
@@ -117,12 +123,13 @@ if (mode === 'book') {
     : openings.length
       ? `\n\nOpen squash court times on ${date}: ${openings.map(o => `${emsTime(o.start)}–${emsTime(o.end)}`).join(', ')} Mountain time.`
       : `\n\nThe squash court has no open hour left on ${date}.`;
+  const settingsLine = error && openings ? '\n\nTo book another time, change the start time at https://bug-swap.github.io/court-reserver/ and run the workflow again.' : '';
   const body = error
     ? `CU court reservation could not be completed for ${date} at ${startTime} Mountain time. Check the GitHub Actions run for details. Error: ${error.message}`
     : result?.submitted
       ? `CU ${result.sport === 'badminton' ? `badminton court ${result.badmintonRoom}` : 'squash'} reservation confirmed for ${date}, ${startTime}–${endTime(startTime)} Mountain time.\n\n${result.confirmation}`
       : `CU court reservation for ${date} was already recorded. No duplicate was submitted.`;
-  const text = body + squashLine;
+  const text = body + squashLine + settingsLine;
   if (!mail) {
     console.error('Booking email unavailable: GMAIL_USER and GMAIL_APP_PASSWORD are required');
     process.exitCode = 1;

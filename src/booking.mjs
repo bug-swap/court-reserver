@@ -1,10 +1,10 @@
 import { COURT_URL, EMS_URL, emsHeadingDate, emsTime, endTime } from './config.mjs';
 
-export function courtCandidates(sport, badmintonRoom) {
+export function courtCandidates(sport, badmintonRoom, squashFallback = 'none') {
   if (sport === 'squash') {
     return [
       { sport: 'squash', room: null, name: 'Squash Court' },
-      ...['3C', '3A', '3B'].map(room => ({
+      ...(squashFallback === 'badminton' ? ['3C', '3A', '3B'] : []).map(room => ({
         sport: 'badminton',
         room,
         name: `Badminton_Pickleball ${room}`
@@ -115,10 +115,10 @@ async function chooseDateAndTime(page, date, startTime) {
   ], 'Search button')).click();
 }
 
-async function selectCourt(page, sport, badmintonRoom) {
+async function selectCourt(page, sport, badmintonRoom, squashFallback) {
   await page.getByText('Rooms You Can Reserve').first().waitFor({ state: 'visible', timeout: 30000 });
   let selected;
-  for (const court of courtCandidates(sport, badmintonRoom)) {
+  for (const court of courtCandidates(sport, badmintonRoom, squashFallback)) {
     const candidates = [
       page.locator(`[aria-label*="Add Room to Cart"][aria-label*="${court.name}"], [title*="Add Room to Cart"][title*="${court.name}"]`),
       page.getByText(court.name, { exact: true }).locator('xpath=..').locator('[aria-label*="Add Room to Cart"], [title*="Add Room to Cart"]')
@@ -134,7 +134,9 @@ async function selectCourt(page, sport, badmintonRoom) {
   }
   if (!selected) {
     const fallback = sport === 'squash'
-      ? 'Squash is unavailable and badminton courts 3C, 3A, and 3B are also unavailable'
+      ? squashFallback === 'badminton'
+        ? 'Squash is unavailable and badminton courts 3C, 3A, and 3B are also unavailable'
+        : 'Squash is unavailable (no backup court is chosen)'
       : `No selectable badminton court found${badmintonRoom === 'any' ? ' (tried 3A, 3B, 3C)' : ` for court ${badmintonRoom}`}`;
     throw new Error(`${fallback} for the requested hour`);
   }
@@ -183,10 +185,10 @@ export async function keepAlive(page) {
   if (page.url().includes('login.microsoftonline.com')) throw new Error('EMS session expired');
 }
 
-export async function bookCourt(page, { date, startTime, sport, badmintonRoom, contact, dryRun = false }) {
+export async function bookCourt(page, { date, startTime, sport, badmintonRoom, squashFallback, contact, dryRun = false }) {
   await keepAlive(page);
   await chooseDateAndTime(page, date, startTime);
-  const selectedCourt = await selectCourt(page, sport, badmintonRoom);
+  const selectedCourt = await selectCourt(page, sport, badmintonRoom, squashFallback);
   if (!dryRun) await fillDetails(page, contact);
   const create = await firstVisible([
     page.getByRole('button', { name: /create reservation/i }),

@@ -56,7 +56,7 @@ export async function loadCanvasSession() {
 }
 
 export async function loadSettings() {
-  return row('court_settings', 'select=sport,start_time,badminton_room&id=eq.1');
+  return row('court_settings', 'select=sport,start_time,badminton_room,squash_fallback&id=eq.1');
 }
 
 export async function saveSettings(settings) {
@@ -65,6 +65,7 @@ export async function saveSettings(settings) {
     sport: settings.sport,
     start_time: settings.startTime,
     badminton_room: settings.badmintonRoom,
+    squash_fallback: settings.squashFallback,
     updated_at: new Date().toISOString()
   }, 'id');
 }

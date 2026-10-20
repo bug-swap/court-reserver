@@ -23,15 +23,15 @@ function authorizedOrigin(request: Request) {
 async function readSettings() {
   if (!projectUrl || !serviceKey) throw new Error('Settings service is not configured.');
   const authHeaders = serviceKey.split('.').length === 3 ? { Authorization: `Bearer ${serviceKey}` } : {};
-  const response = await fetch(`${projectUrl}/rest/v1/court_settings?select=sport,start_time,badminton_room&id=eq.1`, {
+  const response = await fetch(`${projectUrl}/rest/v1/court_settings?select=sport,start_time,badminton_room,squash_fallback&id=eq.1`, {
     headers: { apikey: serviceKey, ...authHeaders },
     signal: AbortSignal.timeout(10000)
   });
   if (!response.ok) throw new Error(`Could not read settings (HTTP ${response.status}).`);
   const rows = await response.json();
   const row = rows[0];
-  if (!row) return { sport: 'squash', startTime: '18:00', badmintonRoom: 'any' };
-  return { sport: row.sport, startTime: row.start_time, badmintonRoom: row.badminton_room };
+  if (!row) return { sport: 'squash', startTime: '18:00', badmintonRoom: 'any', squashFallback: 'none' };
+  return { sport: row.sport, startTime: row.start_time, badmintonRoom: row.badminton_room, squashFallback: row.squash_fallback };
 }
 
 async function rows(path: string) {
@@ -74,7 +74,7 @@ async function readReservations() {
   }));
 }
 
-async function writeSettings(settings: { sport: string; startTime: string; badmintonRoom: string }) {
+async function writeSettings(settings: { sport: string; startTime: string; badmintonRoom: string; squashFallback: string }) {
   if (!projectUrl || !serviceKey) throw new Error('Settings service is not configured.');
   const authHeaders = serviceKey.split('.').length === 3 ? { Authorization: `Bearer ${serviceKey}` } : {};
   const response = await fetch(`${projectUrl}/rest/v1/court_settings?on_conflict=id`, {
@@ -90,6 +90,7 @@ async function writeSettings(settings: { sport: string; startTime: string; badmi
       sport: settings.sport,
       start_time: settings.startTime,
       badminton_room: settings.badmintonRoom,
+      squash_fallback: settings.squashFallback,
       updated_at: new Date().toISOString()
     }),
     signal: AbortSignal.timeout(10000)
@@ -109,14 +110,15 @@ Deno.serve(async request => {
     if (request.method !== 'PATCH') return json({ error: 'Method not allowed.' }, 405);
 
     const body = await request.json();
-    const { sport, startTime, badmintonRoom } = body || {};
+    const { sport, startTime, badmintonRoom, squashFallback = 'none' } = body || {};
     if (!['squash', 'badminton'].includes(sport)) return json({ error: 'Choose squash or badminton.' }, 400);
     if (typeof startTime !== 'string' || !/^(?:[01]\d|2[0-2]):[0-5]\d$/.test(startTime)) {
       return json({ error: 'Choose a start time that leaves one full hour before midnight.' }, 400);
     }
     if (!['any', '3A', '3B', '3C'].includes(badmintonRoom)) return json({ error: 'Choose a valid badminton court.' }, 400);
+    if (!['none', 'badminton'].includes(squashFallback)) return json({ error: 'Choose what to do when squash is taken.' }, 400);
 
-    await writeSettings({ sport, startTime, badmintonRoom });
+    await writeSettings({ sport, startTime, badmintonRoom, squashFallback });
     return json({ ok: true });
   } catch (error) {
     console.error(error instanceof Error ? error.message : 'Settings request failed.');

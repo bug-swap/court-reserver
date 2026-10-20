@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { courtCandidates, squashOpenings } from '../src/booking.mjs';
 
+test('squash books nothing else unless a badminton fallback is chosen', () => {
+  assert.deepEqual(courtCandidates('squash', 'any'), [{ sport: 'squash', room: null, name: 'Squash Court' }]);
+});
+
 test('squash fallback tries badminton courts in configured priority order', () => {
-  assert.deepEqual(courtCandidates('squash', 'any'), [
+  assert.deepEqual(courtCandidates('squash', 'any', 'badminton'), [
     { sport: 'squash', room: null, name: 'Squash Court' },
     { sport: 'badminton', room: '3C', name: 'Badminton_Pickleball 3C' },
     { sport: 'badminton', room: '3A', name: 'Badminton_Pickleball 3A' },

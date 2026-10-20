@@ -6,6 +6,8 @@ const end = document.querySelector('#end-time');
 const summary = document.querySelector('#summary');
 const message = document.querySelector('#message');
 const roomField = document.querySelector('#room-field');
+const fallback = document.querySelector('#squash-fallback');
+const fallbackField = document.querySelector('#fallback-field');
 const saveButton = document.querySelector('#save-button');
 const activeList = document.querySelector('#active-reservations');
 const pastList = document.querySelector('#past-reservations');
@@ -17,6 +19,7 @@ const timeLabel = value => {
 
 function refresh() {
   roomField.hidden = sport.value !== 'badminton';
+  fallbackField.hidden = sport.value !== 'squash';
   const valid = /^(?:[01]\d|2[0-2]):[0-5]\d$/.test(start.value);
   if (valid) {
     const [hour, minute] = start.value.split(':').map(Number);
@@ -28,7 +31,7 @@ function refresh() {
     ? 'Squash Court'
     : room.value === 'any' ? 'any available badminton court' : `Badminton court ${room.value}`;
   summary.textContent = valid
-    ? `Every day: request ${court} for tomorrow, ${timeLabel(start.value)}–${end.value} Mountain time.`
+    ? `Every day: request ${court} for tomorrow, ${timeLabel(start.value)}–${end.value} Mountain time.${sport.value === 'squash' ? fallback.value === 'badminton' ? ' If squash is taken, book a free badminton court instead.' : ' If squash is taken, nothing is booked.' : ''}`
     : 'Choose a start time that leaves one full hour before midnight.';
   return valid;
 }
@@ -83,6 +86,7 @@ async function initialize() {
     const settings = await response.json();
     sport.value = settings.sport || 'squash';
     room.value = settings.badmintonRoom || 'any';
+    fallback.value = settings.squashFallback || 'none';
     start.value = settings.startTime || '18:00';
     refresh();
     renderReservations(settings.reservations);
@@ -92,7 +96,7 @@ async function initialize() {
     event.preventDefault();
     showMessage(message, '');
     if (!refresh()) return showMessage(message, 'The time must end before midnight.', true);
-    const settings = { sport: sport.value, startTime: start.value, badmintonRoom: room.value };
+    const settings = { sport: sport.value, startTime: start.value, badmintonRoom: room.value, squashFallback: fallback.value };
     saveButton.disabled = true;
     saveButton.textContent = 'Saving…';
     try {
@@ -115,7 +119,7 @@ async function initialize() {
   await loadSettings();
 }
 
-for (const control of [sport, room, start]) control.addEventListener('change', refresh);
+for (const control of [sport, room, start, fallback]) control.addEventListener('change', refresh);
 start.addEventListener('input', refresh);
 
 initialize().catch(error => showMessage(message, error instanceof Error ? error.message : 'Could not start the settings page.', true));
