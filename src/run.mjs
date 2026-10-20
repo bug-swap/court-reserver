@@ -4,7 +4,7 @@ import nodemailer from 'nodemailer';
 import { bookCourt, keepAlive } from './booking.mjs';
 import { decryptState, encryptState } from './crypto.mjs';
 import { endTime, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
-import { hasBooking, loadSession, logRun, saveBooking, saveSession, saveSettings } from './supabase.mjs';
+import { hasBooking, loadSession, loadSettings, logRun, saveBooking, saveSession, saveSettings } from './supabase.mjs';
 import { captureBrowserState, restoreSessionStorage } from './browser-state.mjs';
 
 const date = targetDate();
