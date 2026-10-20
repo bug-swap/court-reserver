@@ -11,6 +11,15 @@ const fallbackField = document.querySelector('#fallback-field');
 const saveButton = document.querySelector('#save-button');
 const activeList = document.querySelector('#active-reservations');
 const pastList = document.querySelector('#past-reservations');
+const slotDate = document.querySelector('#slot-date');
+const getSlotsButton = document.querySelector('#get-slots');
+const slotsMessage = document.querySelector('#slots-message');
+const slotList = document.querySelector('#slot-list');
+const slotConfirm = document.querySelector('#slot-confirm');
+const slotConfirmText = document.querySelector('#slot-confirm-text');
+const slotBookButton = document.querySelector('#slot-book');
+const slotCancelButton = document.querySelector('#slot-cancel');
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const timeLabel = value => {
   const [hour, minute] = value.split(':').map(Number);
@@ -46,6 +55,14 @@ function denverNow() {
     timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   }).formatToParts(new Date()).map(part => [part.type, part.value]));
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+function dayLabel(date) {
+  return new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function courtLabel(court) {
+  return court.sport === 'squash' ? 'Squash Court' : `Badminton court ${court.room}`;
 }
 
 function renderList(list, reservations, emptyText) {
@@ -91,6 +108,143 @@ async function initialize() {
     refresh();
     renderReservations(settings.reservations);
   }
+
+  let chosenSlot = null;
+
+  async function getJson(query) {
+    const response = await fetch(`${settingsUrl}?${query}`, { headers: { apikey: backend.anonKey }, cache: 'no-store' });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not reach the settings service.');
+    return result;
+  }
+
+  async function startRun(body) {
+    const response = await fetch(settingsUrl, { method: 'POST', headers, body: JSON.stringify(body) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not start the EMS run.');
+    return Date.now();
+  }
+
+  function renderSlots(availability) {
+    slotConfirm.hidden = true;
+    chosenSlot = null;
+    if (!availability.courts) {
+      slotList.replaceChildren();
+      return showMessage(slotsMessage, 'No slots checked for this day yet. Use Get slots.');
+    }
+    const checked = new Date(availability.fetchedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    showMessage(slotsMessage, `Open slots as of ${checked}. Pick one to book.`);
+    slotList.replaceChildren(...availability.courts.map(court => {
+      const group = document.createElement('div');
+      const heading = document.createElement('h3');
+      const slots = document.createElement('div');
+      group.className = 'slot-group';
+      heading.textContent = courtLabel(court);
+      slots.className = 'slots';
+      if (!court.slots.length) slots.append(Object.assign(document.createElement('span'), { className: 'hint', textContent: 'No open slots.' }));
+      for (const slot of court.slots) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = `${timeLabel(slot.start)}–${timeLabel(slot.end)}`;
+        button.setAttribute('aria-pressed', 'false');
+        button.addEventListener('click', () => {
+          for (const other of slotList.querySelectorAll('button')) other.setAttribute('aria-pressed', 'false');
+          button.setAttribute('aria-pressed', 'true');
+          chosenSlot = { date: slotDate.value, court, slot };
+          slotConfirmText.textContent = `Book ${courtLabel(court)} on ${dayLabel(slotDate.value)}, ${button.textContent} Mountain time?`;
+          slotConfirm.hidden = false;
+        });
+        slots.append(button);
+      }
+      group.append(heading, slots);
+      return group;
+    }));
+  }
+
+  async function showSavedSlots() {
+    try {
+      renderSlots(await getJson(`slots=${slotDate.value}`));
+    } catch (error) {
+      showMessage(slotsMessage, error instanceof Error ? error.message : 'Could not load slots.', true);
+    }
+  }
+
+  function setBusy(busy) {
+    getSlotsButton.disabled = busy;
+    slotBookButton.disabled = busy;
+    slotDate.disabled = busy;
+  }
+
+  // GitHub Actions needs a minute or two to start a browser and reach EMS.
+  async function waitFor(check, waitingText) {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      showMessage(slotsMessage, `${waitingText} (${Math.floor(attempt * 5 / 60)}:${String(attempt * 5 % 60).padStart(2, '0')})`);
+      const result = await check();
+      if (result) return result;
+      await sleep(5000);
+    }
+    throw new Error('EMS did not answer within 5 minutes. Check the automation runs on GitHub.');
+  }
+
+  getSlotsButton.addEventListener('click', async () => {
+    setBusy(true);
+    try {
+      const date = slotDate.value;
+      const requestedAt = await startRun({ action: 'slots', date });
+      const availability = await waitFor(async () => {
+        const result = await getJson(`slots=${date}`);
+        if (result.fetchedAt && Date.parse(result.fetchedAt) > requestedAt - 10000) return result;
+        const [run] = await getJson('runs');
+        if (run?.mode === 'slots' && run.date === date && run.outcome === 'failed' && Date.parse(run.finishedAt) > requestedAt) {
+          throw new Error(`EMS check failed: ${run.error}`);
+        }
+        return null;
+      }, 'Checking EMS for open slots…');
+      renderSlots(availability);
+    } catch (error) {
+      showMessage(slotsMessage, error instanceof Error ? error.message : 'Could not get slots.', true);
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  slotCancelButton.addEventListener('click', () => {
+    slotConfirm.hidden = true;
+    chosenSlot = null;
+    for (const button of slotList.querySelectorAll('button')) button.setAttribute('aria-pressed', 'false');
+  });
+
+  slotBookButton.addEventListener('click', async () => {
+    if (!chosenSlot) return;
+    const { date, court, slot } = chosenSlot;
+    setBusy(true);
+    try {
+      const requestedAt = await startRun({ action: 'book', date, sport: court.sport, startTime: slot.start, badmintonRoom: court.room || 'any' });
+      slotConfirm.hidden = true;
+      const run = await waitFor(async () => {
+        const runs = await getJson('runs');
+        return runs.find(r => r.mode === 'book' && r.date === date && Date.parse(r.finishedAt) > requestedAt) || null;
+      }, `Booking ${courtLabel(court)} at ${timeLabel(slot.start)}…`);
+      if (run.outcome === 'confirmed') showMessage(slotsMessage, `Booked ${courtLabel(court)} on ${dayLabel(date)} at ${timeLabel(slot.start)}. A confirmation email is on its way.`);
+      else if (run.outcome === 'already_booked') showMessage(slotsMessage, `A reservation for ${dayLabel(date)} is already recorded, so nothing new was booked.`, true);
+      else showMessage(slotsMessage, `Booking failed: ${run.error || run.outcome}`, true);
+      await loadSettings();
+    } catch (error) {
+      showMessage(slotsMessage, error instanceof Error ? error.message : 'Could not book the slot.', true);
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  const [, today] = denverNow().match(/^(\d{4}-\d{2}-\d{2})/);
+  const [year, month, day] = today.split('-').map(Number);
+  const tomorrow = new Date(Date.UTC(year, month - 1, day + 1, 12)).toISOString().slice(0, 10);
+  slotDate.replaceChildren(
+    new Option(`Tomorrow, ${dayLabel(tomorrow)}`, tomorrow),
+    new Option(`Today, ${dayLabel(today)}`, today)
+  );
+  slotDate.addEventListener('change', showSavedSlots);
+  void showSavedSlots();
 
   form.addEventListener('submit', async event => {
     event.preventDefault();

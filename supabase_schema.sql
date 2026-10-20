@@ -34,12 +34,19 @@ create table if not exists public.court_reservations (
   synced_at timestamptz not null default now()
 );
 
+-- Open slots per court, written by a "slots" run for the settings page.
+create table if not exists public.court_availability (
+  target_date date primary key,
+  courts jsonb not null,
+  fetched_at timestamptz not null default now()
+);
+
 create table if not exists public.court_runs (
   id bigint generated always as identity primary key,
   started_at timestamptz not null default now(),
-  mode text not null check (mode in ('book', 'keepalive', 'dry-run')),
+  mode text not null check (mode in ('book', 'keepalive', 'dry-run', 'slots')),
   target_date date,
-  outcome text not null check (outcome in ('confirmed', 'already_booked', 'session_active', 'dry_run', 'failed')),
+  outcome text not null check (outcome in ('confirmed', 'already_booked', 'session_active', 'dry_run', 'slots_ready', 'failed')),
   error text
 );
 
@@ -50,6 +57,7 @@ alter table public.court_session enable row level security;
 alter table public.court_bookings enable row level security;
 alter table public.court_runs enable row level security;
 alter table public.court_reservations enable row level security;
+alter table public.court_availability enable row level security;
 
 -- Only the server-side secret key may access these tables. No browser policies.
 revoke all on public.court_settings from anon, authenticated;
@@ -57,8 +65,9 @@ revoke all on public.court_session from anon, authenticated;
 revoke all on public.court_bookings from anon, authenticated;
 revoke all on public.court_runs from anon, authenticated;
 revoke all on public.court_reservations from anon, authenticated;
+revoke all on public.court_availability from anon, authenticated;
 revoke all on sequence public.court_runs_id_seq from anon, authenticated;
-grant all on public.court_settings, public.court_session, public.court_bookings, public.court_runs, public.court_reservations to service_role;
+grant all on public.court_settings, public.court_session, public.court_bookings, public.court_runs, public.court_reservations, public.court_availability to service_role;
 grant usage, select on sequence public.court_runs_id_seq to service_role;
 
 insert into public.court_settings (id, sport, start_time, badminton_room)

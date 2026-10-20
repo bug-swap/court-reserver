@@ -250,12 +250,12 @@ export async function bookCourt(page, { date, startTime, sport, badmintonRoom, s
 const minutes = time => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
 const clock = total => `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 
-// Free stretches of the squash court long enough for a 60-minute booking plus EMS teardown.
-export function squashOpenings(roomsData, bookingsData, date) {
-  const building = roomsData.Buildings.find(b => b.Rooms.some(r => r.DisplayText.trim() === 'Squash Court'));
-  const room = building?.Rooms.find(r => r.DisplayText.trim() === 'Squash Court');
+// Free stretches of a court long enough for a 60-minute booking plus EMS teardown.
+export function courtOpenings(roomsData, bookingsData, date, roomName) {
+  const building = roomsData.Buildings.find(b => b.Rooms.some(r => r.DisplayText.trim() === roomName));
+  const room = building?.Rooms.find(r => r.DisplayText.trim() === roomName);
   const hours = building?.BuildingHours.find(h => h.BuildingId === room?.BuildingID && h.Date.startsWith(date));
-  if (!room || !hours) throw new Error(`EMS did not return squash court hours for ${date}`);
+  if (!room || !hours) throw new Error(`EMS did not return ${roomName} hours for ${date}`);
   if (hours.ClosedAllDay) return [];
   const close = minutes(hours.CloseTime.slice(11));
   const busy = bookingsData.Bookings
@@ -270,6 +270,37 @@ export function squashOpenings(roomsData, bookingsData, date) {
     free = Math.max(free, end);
   }
   return openings;
+}
+
+export function squashOpenings(roomsData, bookingsData, date) {
+  return courtOpenings(roomsData, bookingsData, date, 'Squash Court');
+}
+
+// Back-to-back 60-minute slots in each opening, each followed by its 15-minute teardown.
+export function packedSlots(openings, notBefore = '00:00', teardown = 15) {
+  const slots = [];
+  for (const opening of openings) {
+    const earliest = Math.max(minutes(opening.start), Math.ceil(minutes(notBefore) / 15) * 15);
+    for (let start = earliest; start <= minutes(opening.lastStart); start += 60 + teardown) {
+      slots.push({ start: clock(start), end: clock(start + 60) });
+    }
+  }
+  return slots;
+}
+
+export const SLOT_COURTS = [
+  { sport: 'squash', room: null, name: 'Squash Court' },
+  ...['3A', '3B', '3C'].map(room => ({ sport: 'badminton', room, name: `Badminton_Pickleball ${room}` }))
+];
+
+export async function findSlots(page, date, notBefore) {
+  await keepAlive(page);
+  const { rooms, bookings } = await search(page, date, '09:00');
+  return SLOT_COURTS.map(court => ({
+    sport: court.sport,
+    room: court.room,
+    slots: packedSlots(courtOpenings(rooms, bookings, date, court.name), notBefore)
+  }));
 }
 
 // The open squash start closest to the preferred time, at most maxShift minutes away.

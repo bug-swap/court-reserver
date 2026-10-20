@@ -12,11 +12,23 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'auto, book, keepalive, or dry-run'
+        description: 'auto, book, keepalive, dry-run, or slots'
         required: true
         default: dry-run
         type: choice
-        options: [dry-run, keepalive, book, auto]
+        options: [dry-run, keepalive, book, auto, slots]
+      date:
+        description: 'Optional YYYY-MM-DD (today or tomorrow); default tomorrow'
+        required: false
+      sport:
+        description: 'Optional squash or badminton; books exactly this, with no fallback'
+        required: false
+      start_time:
+        description: 'Optional HH:MM start time'
+        required: false
+      badminton_room:
+        description: 'Optional 3A, 3B, 3C, or any'
+        required: false
 
 concurrency:
   group: cu-court-reservation
@@ -40,6 +52,12 @@ jobs:
       GMAIL_USER: ${{ secrets.GMAIL_USER }}
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       MODE: ${{ github.event.inputs.mode || 'auto' }}
+      TARGET_DATE: ${{ github.event.inputs.date }}
+      SPORT: ${{ github.event.inputs.sport }}
+      START_TIME: ${{ github.event.inputs.start_time }}
+      BADMINTON_ROOM: ${{ github.event.inputs.badminton_room }}
+      # A slot picked on the settings page is booked exactly as chosen.
+      SQUASH_FALLBACK: ${{ github.event.inputs.sport && 'none' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

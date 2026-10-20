@@ -88,6 +88,10 @@ export async function saveReservations(reservations) {
   })), 'ems_id');
 }
 
+export async function saveAvailability(date, courts) {
+  await upsert('court_availability', { target_date: date, courts, fetched_at: new Date().toISOString() }, 'target_date');
+}
+
 export async function logRun({ mode, date, outcome, error }) {
   await request('court_runs', {
     method: 'POST',

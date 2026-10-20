@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emsHeadingDate, emsTime, endTime, requestedRoom, requestedTime, targetDate } from '../src/config.mjs';
+import { emsHeadingDate, emsTime, endTime, requestedDate, requestedRoom, requestedTime, targetDate } from '../src/config.mjs';
 
 test('books tomorrow in Denver across spring DST', () => {
   assert.equal(targetDate(new Date('2026-03-08T07:07:00Z')), '2026-03-09');
@@ -21,4 +21,12 @@ test('accepts configurable one-hour slots and badminton rooms', () => {
 test('formats dates like the EMS new-booking heading', () => {
   assert.equal(emsHeadingDate('2026-10-20'), 'Tue Oct 20, 2026');
   assert.equal(emsHeadingDate('2026-11-01'), 'Sun Nov 1, 2026');
+});
+
+test('explicit booking dates are limited to today and tomorrow in Denver', () => {
+  const now = new Date('2026-10-21T03:00:00Z');
+  assert.equal(requestedDate('', now), '2026-10-21');
+  assert.equal(requestedDate('2026-10-20', now), '2026-10-20');
+  assert.equal(requestedDate('2026-10-21', now), '2026-10-21');
+  assert.throws(() => requestedDate('2026-10-22', now), /today or tomorrow/);
 });

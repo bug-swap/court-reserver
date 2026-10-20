@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { courtCandidates, nearestSquashStart, squashOpenings } from '../src/booking.mjs';
+import { courtCandidates, nearestSquashStart, packedSlots, squashOpenings } from '../src/booking.mjs';
 
 test('squash books nothing else unless a badminton fallback is chosen', () => {
   assert.deepEqual(courtCandidates('squash', 'any'), [{ sport: 'squash', room: null, name: 'Squash Court' }]);
@@ -40,4 +40,13 @@ test('nearby squash picks the closest open start within three hours', () => {
   assert.equal(nearestSquashStart(openings, '10:00'), '10:00');
   assert.equal(nearestSquashStart([{ start: '06:00', end: '13:00', lastStart: '11:45' }], '18:00'), null);
   assert.equal(nearestSquashStart([], '18:00'), null);
+});
+
+test('slots run back to back with 15 minutes of teardown between them', () => {
+  const openings = [{ start: '06:00', end: '09:00', lastStart: '07:45' }, { start: '17:15', end: '20:00', lastStart: '18:45' }];
+  assert.deepEqual(packedSlots(openings), [
+    { start: '06:00', end: '07:00' }, { start: '07:15', end: '08:15' },
+    { start: '17:15', end: '18:15' }, { start: '18:30', end: '19:30' }
+  ]);
+  assert.deepEqual(packedSlots(openings, '17:20'), [{ start: '17:30', end: '18:30' }, { start: '18:45', end: '19:45' }]);
 });

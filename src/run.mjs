@@ -1,16 +1,16 @@
 import { chromium } from 'playwright';
 import { readFile, writeFile } from 'node:fs/promises';
 import nodemailer from 'nodemailer';
-import { bookCourt, findSquashOpenings, keepAlive, readReservations } from './booking.mjs';
+import { bookCourt, findSlots, findSquashOpenings, keepAlive, readReservations } from './booking.mjs';
 import { decryptState, encryptState } from './crypto.mjs';
-import { emsTime, endTime, requestedFallback, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
-import { hasBooking, loadCanvasSession, loadSession, loadSettings, logRun, saveBooking, saveReservations, saveSession, saveSettings } from './supabase.mjs';
+import { denverParts, emsTime, endTime, requestedDate, requestedFallback, requestedRoom, requestedSport, requestedTime } from './config.mjs';
+import { hasBooking, loadCanvasSession, loadSession, loadSettings, logRun, saveAvailability, saveBooking, saveReservations, saveSession, saveSettings } from './supabase.mjs';
 import { captureBrowserState, restoreSessionStorage, withSsoCookies } from './browser-state.mjs';
 
-const date = targetDate();
+const date = requestedDate(process.env.TARGET_DATE);
 const requestedMode = process.env.MODE || 'auto';
 const mode = requestedMode === 'auto' ? (await hasBooking(date) ? 'keepalive' : 'book') : requestedMode;
-if (!['book', 'keepalive', 'dry-run'].includes(mode)) throw new Error('MODE must be auto, book, keepalive, or dry-run');
+if (!['book', 'keepalive', 'dry-run', 'slots'].includes(mode)) throw new Error('MODE must be auto, book, keepalive, dry-run, or slots');
 const encrypted = await loadSession() || process.env.EMS_INITIAL_STATE ||
   await readFile('initial-state.txt', 'utf8').catch(() => { throw new Error('No EMS session in Supabase. Run npm run login to capture one.'); });
 const state = decryptState(encrypted);
@@ -59,6 +59,14 @@ try {
     await keepAlive(page);
     outcome = 'session_active';
     console.log('EMS session active');
+  } else if (mode === 'slots') {
+    const now = denverParts();
+    const isToday = date === `${now.year}-${String(now.month).padStart(2, '0')}-${String(now.day).padStart(2, '0')}`;
+    const notBefore = isToday ? `${String(now.hour).padStart(2, '0')}:${String(now.minute).padStart(2, '0')}` : '00:00';
+    const courts = await findSlots(page, date, notBefore);
+    await saveAvailability(date, courts);
+    outcome = 'slots_ready';
+    console.log(`Saved open slots for ${date}: ${courts.map(c => `${c.room || c.sport} ${c.slots.length}`).join(', ')}`);
   } else if (mode !== 'keepalive' && (await hasBooking(date) || state.bookedDates?.includes(date))) {
     outcome = 'already_booked';
     console.log(`Already booked ${date}; skipping court selection`);

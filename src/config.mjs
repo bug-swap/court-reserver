@@ -17,6 +17,15 @@ export function targetDate(date = new Date()) {
   return target.toISOString().slice(0, 10);
 }
 
+// EMS accepts bookings for today and tomorrow only.
+export function requestedDate(value, now = new Date()) {
+  if (!value) return targetDate(now);
+  const { year, month, day } = denverParts(now);
+  const today = new Date(Date.UTC(year, month - 1, day, 12)).toISOString().slice(0, 10);
+  if (![today, targetDate(now)].includes(value)) throw new Error('TARGET_DATE must be today or tomorrow in Denver');
+  return value;
+}
+
 export function requestedSport(value = 'squash') {
   const sport = value.trim().toLowerCase();
   if (!['squash', 'badminton'].includes(sport)) throw new Error('SPORT must be squash or badminton');

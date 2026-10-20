@@ -1,11 +1,14 @@
 const projectUrl = Deno.env.get('SUPABASE_URL')?.replace(/\/$/, '');
 const serviceKey = Deno.env.get('COURT_SUPABASE_SERVICE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const siteOrigin = 'https://bug-swap.github.io';
+// Fine-grained token limited to Actions: write on bug-swap/court-reserver.
+const githubToken = Deno.env.get('COURT_GITHUB_TOKEN');
+const workflowUrl = 'https://api.github.com/repos/bug-swap/court-reserver/actions/workflows/reserve.yml/dispatches';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': siteOrigin,
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, PATCH, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
   'Vary': 'Origin'
 };
 
@@ -98,6 +101,45 @@ async function writeSettings(settings: { sport: string; startTime: string; badmi
   if (!response.ok) throw new Error(`Could not save settings (HTTP ${response.status}).`);
 }
 
+// EMS takes bookings for today and tomorrow only.
+function bookableDates() {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver' }).format(new Date());
+  const [year, month, day] = today.split('-').map(Number);
+  return [today, new Date(Date.UTC(year, month - 1, day + 1, 12)).toISOString().slice(0, 10)];
+}
+
+async function dispatch(inputs: Record<string, string>) {
+  if (!githubToken) throw new Error('Slot booking is not configured yet (COURT_GITHUB_TOKEN is missing).');
+  const response = await fetch(workflowUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${githubToken}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'court-settings',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ ref: 'main', inputs }),
+    signal: AbortSignal.timeout(10000)
+  });
+  if (!response.ok) throw new Error(`Could not start the EMS run (GitHub HTTP ${response.status}).`);
+}
+
+async function handleAction(body: Record<string, string>) {
+  const { action, date } = body;
+  if (!bookableDates().includes(date)) return json({ error: 'Choose today or tomorrow.' }, 400);
+  if (action === 'slots') {
+    await dispatch({ mode: 'slots', date });
+    return json({ ok: true });
+  }
+  if (action !== 'book') return json({ error: 'Unknown action.' }, 400);
+  const { sport, startTime, badmintonRoom } = body;
+  if (!['squash', 'badminton'].includes(sport)) return json({ error: 'Choose squash or badminton.' }, 400);
+  if (typeof startTime !== 'string' || !/^(?:[01]\d|2[0-2]):[0-5]\d$/.test(startTime)) return json({ error: 'Choose a valid slot.' }, 400);
+  if (sport === 'badminton' && !['3A', '3B', '3C'].includes(badmintonRoom)) return json({ error: 'Choose a badminton court.' }, 400);
+  await dispatch({ mode: 'book', date, sport, start_time: startTime, badminton_room: sport === 'badminton' ? badmintonRoom : 'any' });
+  return json({ ok: true });
+}
+
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') {
     if (!authorizedOrigin(request)) return json({ error: 'Origin not allowed.' }, 403);
@@ -106,7 +148,23 @@ Deno.serve(async request => {
   if (!authorizedOrigin(request)) return json({ error: 'Origin not allowed.' }, 403);
 
   try {
-    if (request.method === 'GET') return json({ ...await readSettings(), reservations: await readReservations() });
+    if (request.method === 'GET') {
+      const params = new URL(request.url).searchParams;
+      const slotsDate = params.get('slots');
+      if (slotsDate) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(slotsDate)) return json({ error: 'Invalid date.' }, 400);
+        const [row] = await rows(`court_availability?select=courts,fetched_at&target_date=eq.${slotsDate}`);
+        return json(row ? { courts: row.courts, fetchedAt: row.fetched_at } : { courts: null, fetchedAt: null });
+      }
+      if (params.has('runs')) {
+        const recent = await rows('court_runs?select=mode,target_date,outcome,error,started_at&order=started_at.desc&limit=5');
+        return json(recent.map((run: Record<string, string>) => ({
+          mode: run.mode, date: run.target_date, outcome: run.outcome, error: run.error, finishedAt: run.started_at
+        })));
+      }
+      return json({ ...await readSettings(), reservations: await readReservations() });
+    }
+    if (request.method === 'POST') return await handleAction(await request.json() || {});
     if (request.method !== 'PATCH') return json({ error: 'Method not allowed.' }, 405);
 
     const body = await request.json();
