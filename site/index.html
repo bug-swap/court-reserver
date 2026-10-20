@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://ahtzxstwbzovefgmbpfp.supabase.co; base-uri 'none'; form-action 'none'">
   <title>CU Court Reserver</title>
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=2">
 </head>
 <body>
   <main>
@@ -32,7 +32,7 @@
         </div>
         <p class="hint">Times use the Recreation Center’s Mountain time zone. EMS limits each court booking to 60 minutes.</p>
         <div class="summary" id="summary" aria-live="polite"></div>
-        <div class="actions"><button id="save-button" type="submit">Save settings</button><a id="actions-link" href="https://github.com/bug-swap/court-reserver/actions/workflows/reserve.yml">View automation runs</a></div>
+        <div class="actions"><button id="save-button" type="submit">Save settings</button></div>
         <p id="message" role="status" aria-live="polite"></p>
       </form>
     </section>
@@ -45,6 +45,6 @@
     </section>
     <footer>Settings are saved privately in Supabase. The booking runs through GitHub Actions. <a href="https://ems.colorado.edu/">Open CU EMS</a>.</footer>
   </main>
-  <script src="./app.js" defer></script>
+  <script src="./app.js?v=2" defer></script>
 </body>
 </html>
