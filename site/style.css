@@ -12,5 +12,8 @@
     button{border:0;border-radius:11px;background:#17633d;color:#fff;font:700 1rem system-ui;padding:14px 22px;cursor:pointer}
     button:hover{background:#0f4e2d}button:disabled{opacity:.6;cursor:wait}.actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     a{color:#17633d}footer{margin-top:22px;font-size:.88rem;color:#68675f}#message{margin-top:16px;color:#254b31}#message.error{color:#9a361e}
-    .auth-card{margin-top:28px;padding-top:24px;border-top:1px solid #e5e1d6}.auth-card p{margin-bottom:12px}#auth-message{margin-top:12px;color:#254b31}#auth-message.error{color:#9a361e}
+    .card+.card{margin-top:24px}h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.12em;color:#6a5c31;margin:22px 0 10px}
+    .reservations{list-style:none;margin:0;padding:0}.reservations li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 0;border-top:1px solid #eeeae0}
+    .reservations li:first-child{border-top:0}.reservations .when{font-weight:700}.reservations .court{color:#5b5a52}.reservations .empty{color:#69675f;font-size:.92rem}
+    #past-reservations li:not(.empty){opacity:.7}
     #room-field[hidden]{display:none}@media(max-width:560px){.grid{grid-template-columns:1fr;gap:0}.card{padding:22px}}

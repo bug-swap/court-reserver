@@ -1,7 +1,5 @@
 const projectUrl = Deno.env.get('SUPABASE_URL')?.replace(/\/$/, '');
 const serviceKey = Deno.env.get('COURT_SUPABASE_SERVICE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-const anonKey = Deno.env.get('COURT_SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
-const ownerEmail = Deno.env.get('COURT_SETTINGS_OWNER_EMAIL')?.trim().toLowerCase();
 const siteOrigin = 'https://bug-swap.github.io';
 
 const corsHeaders = {
@@ -22,19 +20,6 @@ function authorizedOrigin(request: Request) {
   return request.headers.get('origin') === siteOrigin;
 }
 
-async function requireOwner(request: Request) {
-  if (!projectUrl || !anonKey || !ownerEmail) throw new Error('Settings service is not configured.');
-  const authorization = request.headers.get('authorization');
-  if (!authorization?.startsWith('Bearer ')) return false;
-  const response = await fetch(`${projectUrl}/auth/v1/user`, {
-    headers: { apikey: anonKey, Authorization: authorization },
-    signal: AbortSignal.timeout(10000)
-  });
-  if (!response.ok) return false;
-  const user = await response.json();
-  return typeof user.email === 'string' && user.email.toLowerCase() === ownerEmail;
-}
-
 async function readSettings() {
   if (!projectUrl || !serviceKey) throw new Error('Settings service is not configured.');
   const authHeaders = serviceKey.split('.').length === 3 ? { Authorization: `Bearer ${serviceKey}` } : {};
@@ -47,6 +32,25 @@ async function readSettings() {
   const row = rows[0];
   if (!row) return { sport: 'squash', startTime: '18:00', badmintonRoom: 'any' };
   return { sport: row.sport, startTime: row.start_time, badmintonRoom: row.badminton_room };
+}
+
+async function readReservations() {
+  if (!projectUrl || !serviceKey) throw new Error('Settings service is not configured.');
+  const authHeaders = serviceKey.split('.').length === 3 ? { Authorization: `Bearer ${serviceKey}` } : {};
+  // The confirmation column holds a raw EMS page with personal details, so it is never returned.
+  const response = await fetch(`${projectUrl}/rest/v1/court_bookings?select=target_date,sport,start_time,badminton_room,booked_at&order=target_date.desc&limit=60`, {
+    headers: { apikey: serviceKey, ...authHeaders },
+    signal: AbortSignal.timeout(10000)
+  });
+  if (!response.ok) throw new Error(`Could not read reservations (HTTP ${response.status}).`);
+  const rows = await response.json();
+  return rows.map((row: Record<string, string>) => ({
+    date: row.target_date,
+    sport: row.sport,
+    startTime: row.start_time,
+    badmintonRoom: row.badminton_room,
+    bookedAt: row.booked_at
+  }));
 }
 
 async function writeSettings(settings: { sport: string; startTime: string; badmintonRoom: string }) {
@@ -80,9 +84,8 @@ Deno.serve(async request => {
   if (!authorizedOrigin(request)) return json({ error: 'Origin not allowed.' }, 403);
 
   try {
-    if (request.method === 'GET') return json(await readSettings());
+    if (request.method === 'GET') return json({ ...await readSettings(), reservations: await readReservations() });
     if (request.method !== 'PATCH') return json({ error: 'Method not allowed.' }, 405);
-    if (!await requireOwner(request)) return json({ error: 'Sign in with the reservation owner’s email to save settings.' }, 403);
 
     const body = await request.json();
     const { sport, startTime, badmintonRoom } = body || {};

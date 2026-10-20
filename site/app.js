@@ -1,16 +1,14 @@
 const form = document.querySelector('#settings-form');
-const authForm = document.querySelector('#auth-form');
 const sport = document.querySelector('#sport');
 const room = document.querySelector('#badminton-room');
 const start = document.querySelector('#start-time');
 const end = document.querySelector('#end-time');
 const summary = document.querySelector('#summary');
 const message = document.querySelector('#message');
-const authMessage = document.querySelector('#auth-message');
 const roomField = document.querySelector('#room-field');
 const saveButton = document.querySelector('#save-button');
-const signOutButton = document.querySelector('#sign-out');
-const sessionStorageKey = 'court-settings-session';
+const activeList = document.querySelector('#active-reservations');
+const pastList = document.querySelector('#past-reservations');
 
 const timeLabel = value => {
   const [hour, minute] = value.split(':').map(Number);
@@ -40,67 +38,40 @@ function showMessage(element, text, isError = false) {
   element.classList.toggle('error', isError);
 }
 
-function storeSession(session) {
-  if (session?.access_token && session?.refresh_token) {
-    session.expires_at = session.expires_at || Math.floor(Date.now() / 1000) + (session.expires_in || 3600);
-    sessionStorage.setItem(sessionStorageKey, JSON.stringify(session));
-  } else {
-    sessionStorage.removeItem(sessionStorageKey);
-  }
+function denverToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver' }).format(new Date());
 }
 
-function readSession() {
-  try {
-    return JSON.parse(sessionStorage.getItem(sessionStorageKey) || 'null');
-  } catch {
-    storeSession(null);
-    return null;
-  }
+function renderList(list, reservations, emptyText) {
+  list.replaceChildren(...(reservations.length ? reservations.map(reservation => {
+    const item = document.createElement('li');
+    const when = document.createElement('span');
+    const court = document.createElement('span');
+    const day = new Date(`${reservation.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const [hour, minute] = reservation.startTime.split(':').map(Number);
+    when.className = 'when';
+    when.textContent = `${day}, ${timeLabel(reservation.startTime)}–${timeLabel(`${String(hour + 1).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)}`;
+    court.className = 'court';
+    court.textContent = reservation.sport === 'squash'
+      ? 'Squash Court'
+      : reservation.badmintonRoom === 'any' ? 'Badminton' : `Badminton court ${reservation.badmintonRoom}`;
+    item.append(when, court);
+    return item;
+  }) : [Object.assign(document.createElement('li'), { className: 'empty', textContent: emptyText })]));
+}
+
+function renderReservations(reservations = []) {
+  const today = denverToday();
+  renderList(activeList, reservations.filter(r => r.date >= today).sort((a, b) => a.date.localeCompare(b.date)), 'No upcoming reservations.');
+  renderList(pastList, reservations.filter(r => r.date < today), 'No past reservations yet.');
 }
 
 async function initialize() {
   const configResponse = await fetch('./backend-config.json', { cache: 'no-store' });
   if (!configResponse.ok) throw new Error('Could not load the settings service configuration.');
   const backend = await configResponse.json();
-  const authUrl = `${backend.url}/auth/v1`;
   const settingsUrl = `${backend.url}/functions/v1/court-settings`;
   const headers = { apikey: backend.anonKey, 'Content-Type': 'application/json' };
-
-  const params = new URLSearchParams(location.hash.slice(1));
-  if (params.has('access_token')) {
-    storeSession({
-      access_token: params.get('access_token'),
-      refresh_token: params.get('refresh_token'),
-      expires_in: Number(params.get('expires_in') || 3600),
-      token_type: params.get('token_type') || 'bearer'
-    });
-    history.replaceState(null, '', `${location.pathname}${location.search}`);
-  }
-
-  async function currentSession() {
-    const session = readSession();
-    if (!session) return null;
-    if (session.expires_at > Math.floor(Date.now() / 1000) + 30) return session;
-    const response = await fetch(`${authUrl}/token?grant_type=refresh_token`, {
-      method: 'POST', headers,
-      body: JSON.stringify({ refresh_token: session.refresh_token })
-    });
-    if (!response.ok) {
-      storeSession(null);
-      return null;
-    }
-    const renewed = await response.json();
-    storeSession(renewed);
-    return readSession();
-  }
-
-  async function updateAuthState() {
-    const session = await currentSession();
-    authForm.hidden = Boolean(session);
-    signOutButton.hidden = !session;
-    if (session) showMessage(authMessage, 'Signed in. You can save your reservation settings.');
-    return session;
-  }
 
   async function loadSettings() {
     const response = await fetch(settingsUrl, { headers: { apikey: backend.anonKey }, cache: 'no-store' });
@@ -110,47 +81,20 @@ async function initialize() {
     room.value = settings.badmintonRoom || 'any';
     start.value = settings.startTime || '18:00';
     refresh();
+    renderReservations(settings.reservations);
   }
-
-  authForm.addEventListener('submit', async event => {
-    event.preventDefault();
-    showMessage(authMessage, 'Sending sign-in link…');
-    const button = authForm.querySelector('button[type="submit"]');
-    button.disabled = true;
-    try {
-      const redirect = `${location.origin}${location.pathname}`;
-      const response = await fetch(`${authUrl}/otp?redirect_to=${encodeURIComponent(redirect)}`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ email: authForm.elements.email.value.trim(), create_user: true })
-      });
-      if (!response.ok) throw new Error('Supabase could not send the link. Check the email address or try again shortly.');
-      showMessage(authMessage, 'Check your email and open the sign-in link on this device.');
-    } catch (error) {
-      showMessage(authMessage, error instanceof Error ? error.message : 'Could not send the sign-in link.', true);
-    } finally {
-      button.disabled = false;
-    }
-  });
-
-  signOutButton.addEventListener('click', () => {
-    storeSession(null);
-    showMessage(authMessage, 'Signed out.');
-    void updateAuthState();
-  });
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
     showMessage(message, '');
     if (!refresh()) return showMessage(message, 'The time must end before midnight.', true);
-    const session = await currentSession();
-    if (!session) return showMessage(message, 'Sign in with the reservation owner’s email before saving.', true);
     const settings = { sport: sport.value, startTime: start.value, badmintonRoom: room.value };
     saveButton.disabled = true;
     saveButton.textContent = 'Saving…';
     try {
       const response = await fetch(settingsUrl, {
         method: 'PATCH',
-        headers: { ...headers, Authorization: `Bearer ${session.access_token}` },
+        headers,
         body: JSON.stringify(settings)
       });
       const result = await response.json().catch(() => ({}));
@@ -165,7 +109,6 @@ async function initialize() {
   });
 
   await loadSettings();
-  await updateAuthState();
 }
 
 for (const control of [sport, room, start]) control.addEventListener('change', refresh);
