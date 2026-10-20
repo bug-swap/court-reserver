@@ -211,3 +211,55 @@ export async function bookCourt(page, { date, startTime, sport, badmintonRoom, c
     confirmation
   };
 }
+
+const minutes = time => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+const clock = total => `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+
+// Free stretches of the squash court long enough for a 60-minute booking plus EMS teardown.
+export function squashOpenings(roomsData, bookingsData, date) {
+  const building = roomsData.Buildings.find(b => b.Rooms.some(r => r.DisplayText.trim() === 'Squash Court'));
+  const room = building?.Rooms.find(r => r.DisplayText.trim() === 'Squash Court');
+  const hours = building?.BuildingHours.find(h => h.BuildingId === room?.BuildingID && h.Date.startsWith(date));
+  if (!room || !hours) throw new Error(`EMS did not return squash court hours for ${date}`);
+  if (hours.ClosedAllDay) return [];
+  const close = minutes(hours.CloseTime.slice(11));
+  const busy = bookingsData.Bookings
+    .filter(b => b.RoomId === room.Id && b.TimeBookingStart.startsWith(date))
+    .map(b => [minutes(b.TimeBookingStart.slice(11)), b.TimeBookingEnd.startsWith(date) ? minutes(b.TimeBookingEnd.slice(11)) : 24 * 60])
+    .sort((a, b) => a[0] - b[0]);
+  const needed = 60 + room.TeardownHours * 60;
+  const openings = [];
+  let free = minutes(hours.OpenTime.slice(11));
+  for (const [start, end] of [...busy, [close, close]]) {
+    if (start - free >= needed) openings.push({ start: clock(free), end: clock(start) });
+    free = Math.max(free, end);
+  }
+  return openings;
+}
+
+export async function findSquashOpenings(page, date, startTime) {
+  await keepAlive(page);
+  const json = async response => JSON.parse((await response.json()).d);
+  const [rooms, bookings] = await Promise.all([
+    page.waitForResponse(r => r.url().includes('GetBrowseLocationsRoomsForRoomRequest'), { timeout: 60000 }).then(json),
+    page.waitForResponse(r => r.url().includes('GetBrowseLocationsBookingsForRoomRequest'), { timeout: 60000 }).then(json),
+    chooseDateAndTime(page, date, startTime)
+  ]);
+  return squashOpenings(rooms, bookings, date);
+}
+
+// The reservations on EMS's My Events page: upcoming plus the most recent past ones.
+export async function readReservations(page) {
+  const list = () => page.waitForResponse(r => r.url().includes('PopulateReservationList'), { timeout: 30000 })
+    .then(async response => JSON.parse((await response.json()).d));
+  // The first render is server-side; switching tabs is what calls the JSON API.
+  await page.goto(`${new URL(EMS_URL).origin}/BrowseReservations.aspx`, { waitUntil: 'networkidle' });
+  const [past] = await Promise.all([list(), page.getByText(/^past$/i).first().click()]);
+  const [current] = await Promise.all([list(), page.getByText(/^current$/i).first().click()]);
+  return [...current.currentReservations.eventList || [], ...past.pastReservations.eventList || []].map(event => ({
+    emsId: event.id,
+    startsAt: event.start,
+    location: event.location,
+    status: event.status
+  }));
+}

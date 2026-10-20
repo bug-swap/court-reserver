@@ -24,6 +24,15 @@ create table if not exists public.court_bookings (
   booked_at timestamptz not null default now()
 );
 
+-- Mirror of EMS My Events, refreshed by each successful run. starts_at is Mountain local time.
+create table if not exists public.court_reservations (
+  ems_id bigint primary key,
+  starts_at timestamp not null,
+  location text not null,
+  status text not null,
+  synced_at timestamptz not null default now()
+);
+
 create table if not exists public.court_runs (
   id bigint generated always as identity primary key,
   started_at timestamptz not null default now(),
@@ -39,14 +48,16 @@ alter table public.court_settings enable row level security;
 alter table public.court_session enable row level security;
 alter table public.court_bookings enable row level security;
 alter table public.court_runs enable row level security;
+alter table public.court_reservations enable row level security;
 
 -- Only the server-side secret key may access these tables. No browser policies.
 revoke all on public.court_settings from anon, authenticated;
 revoke all on public.court_session from anon, authenticated;
 revoke all on public.court_bookings from anon, authenticated;
 revoke all on public.court_runs from anon, authenticated;
+revoke all on public.court_reservations from anon, authenticated;
 revoke all on sequence public.court_runs_id_seq from anon, authenticated;
-grant all on public.court_settings, public.court_session, public.court_bookings, public.court_runs to service_role;
+grant all on public.court_settings, public.court_session, public.court_bookings, public.court_runs, public.court_reservations to service_role;
 grant usage, select on sequence public.court_runs_id_seq to service_role;
 
 insert into public.court_settings (id, sport, start_time, badminton_room)

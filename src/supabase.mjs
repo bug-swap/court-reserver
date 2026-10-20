@@ -80,6 +80,13 @@ export async function saveBooking({ date, sport, startTime, badmintonRoom, confi
   }, 'target_date');
 }
 
+export async function saveReservations(reservations) {
+  if (!reservations.length) return;
+  await upsert('court_reservations', reservations.map(r => ({
+    ems_id: r.emsId, starts_at: r.startsAt, location: r.location, status: r.status, synced_at: new Date().toISOString()
+  })), 'ems_id');
+}
+
 export async function logRun({ mode, date, outcome, error }) {
   await request('court_runs', {
     method: 'POST',

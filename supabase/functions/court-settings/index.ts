@@ -34,22 +34,43 @@ async function readSettings() {
   return { sport: row.sport, startTime: row.start_time, badmintonRoom: row.badminton_room };
 }
 
-async function readReservations() {
+async function rows(path: string) {
   if (!projectUrl || !serviceKey) throw new Error('Settings service is not configured.');
   const authHeaders = serviceKey.split('.').length === 3 ? { Authorization: `Bearer ${serviceKey}` } : {};
-  // The confirmation column holds a raw EMS page with personal details, so it is never returned.
-  const response = await fetch(`${projectUrl}/rest/v1/court_bookings?select=target_date,sport,start_time,badminton_room,booked_at&order=target_date.desc&limit=60`, {
+  const response = await fetch(`${projectUrl}/rest/v1/${path}`, {
     headers: { apikey: serviceKey, ...authHeaders },
     signal: AbortSignal.timeout(10000)
   });
-  if (!response.ok) throw new Error(`Could not read reservations (HTTP ${response.status}).`);
-  const rows = await response.json();
-  return rows.map((row: Record<string, string>) => ({
+  if (!response.ok) throw new Error(`Could not read ${path.split('?')[0]} (HTTP ${response.status}).`);
+  return response.json();
+}
+
+function courtName(location: string) {
+  const room = location.split(' - ').pop()?.trim() || location;
+  const badminton = room.match(/^Badminton_Pickleball (\w+)$/);
+  return badminton ? `Badminton court ${badminton[1]}` : room;
+}
+
+async function readReservations() {
+  try {
+    // Mirrored from EMS My Events by each automation run.
+    const synced = await rows('court_reservations?select=starts_at,location,status&order=starts_at.desc&limit=60');
+    return synced.map((row: Record<string, string>) => ({
+      date: row.starts_at.slice(0, 10),
+      startTime: row.starts_at.slice(11, 16),
+      court: courtName(row.location),
+      status: row.status
+    }));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : 'Could not read synced reservations.');
+  }
+  // Before the first sync, fall back to what the automation booked. The raw EMS confirmation is never returned.
+  const booked = await rows('court_bookings?select=target_date,sport,start_time,badminton_room&order=target_date.desc&limit=60');
+  return booked.map((row: Record<string, string>) => ({
     date: row.target_date,
-    sport: row.sport,
     startTime: row.start_time,
-    badmintonRoom: row.badminton_room,
-    bookedAt: row.booked_at
+    court: row.sport === 'squash' ? 'Squash Court' : row.badminton_room === 'any' ? 'Badminton' : `Badminton court ${row.badminton_room}`,
+    status: 'Confirmed'
   }));
 }
 

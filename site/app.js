@@ -38,8 +38,11 @@ function showMessage(element, text, isError = false) {
   element.classList.toggle('error', isError);
 }
 
-function denverToday() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver' }).format(new Date());
+function denverNow() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date()).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
 function renderList(list, reservations, emptyText) {
@@ -52,18 +55,19 @@ function renderList(list, reservations, emptyText) {
     when.className = 'when';
     when.textContent = `${day}, ${timeLabel(reservation.startTime)}–${timeLabel(`${String(hour + 1).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)}`;
     court.className = 'court';
-    court.textContent = reservation.sport === 'squash'
-      ? 'Squash Court'
-      : reservation.badmintonRoom === 'any' ? 'Badminton' : `Badminton court ${reservation.badmintonRoom}`;
+    court.textContent = reservation.status && reservation.status !== 'Confirmed'
+      ? `${reservation.court} · ${reservation.status}`
+      : reservation.court;
     item.append(when, court);
     return item;
   }) : [Object.assign(document.createElement('li'), { className: 'empty', textContent: emptyText })]));
 }
 
 function renderReservations(reservations = []) {
-  const today = denverToday();
-  renderList(activeList, reservations.filter(r => r.date >= today).sort((a, b) => a.date.localeCompare(b.date)), 'No upcoming reservations.');
-  renderList(pastList, reservations.filter(r => r.date < today), 'No past reservations yet.');
+  const now = denverNow();
+  const startsAt = r => `${r.date}T${r.startTime}`;
+  renderList(activeList, reservations.filter(r => startsAt(r) >= now).sort((a, b) => startsAt(a).localeCompare(startsAt(b))), 'No upcoming reservations.');
+  renderList(pastList, reservations.filter(r => startsAt(r) < now).sort((a, b) => startsAt(b).localeCompare(startsAt(a))), 'No past reservations yet.');
 }
 
 async function initialize() {

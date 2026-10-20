@@ -1,10 +1,10 @@
 import { chromium } from 'playwright';
 import { readFile, writeFile } from 'node:fs/promises';
 import nodemailer from 'nodemailer';
-import { bookCourt, keepAlive } from './booking.mjs';
+import { bookCourt, findSquashOpenings, keepAlive, readReservations } from './booking.mjs';
 import { decryptState, encryptState } from './crypto.mjs';
-import { endTime, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
-import { hasBooking, loadCanvasSession, loadSession, loadSettings, logRun, saveBooking, saveSession, saveSettings } from './supabase.mjs';
+import { emsTime, endTime, requestedRoom, requestedSport, requestedTime, targetDate } from './config.mjs';
+import { hasBooking, loadCanvasSession, loadSession, loadSettings, logRun, saveBooking, saveReservations, saveSession, saveSettings } from './supabase.mjs';
 import { captureBrowserState, restoreSessionStorage, withSsoCookies } from './browser-state.mjs';
 
 const date = targetDate();
@@ -49,6 +49,7 @@ const context = await browser.newContext({ storageState: withSsoCookies(state.br
 await restoreSessionStorage(context, state.sessionStorage);
 const page = await context.newPage();
 let result;
+let openings;
 let error;
 let outcome;
 try {
@@ -78,6 +79,14 @@ try {
       console.log(`Dry run reached the final confirmation step with ${selectedCourt}.`);
     }
   }
+  if (mode === 'book' && ['confirmed', 'already_booked'].includes(outcome)) {
+    openings = await findSquashOpenings(page, date, startTime).catch(caught => {
+      console.error(`Could not read squash openings: ${caught.message}`);
+    });
+  }
+  await readReservations(page).then(saveReservations).catch(caught => {
+    console.error(`Could not sync EMS reservations: ${caught.message}`);
+  });
 } catch (caught) {
   error = caught;
   outcome = 'failed';
@@ -104,11 +113,16 @@ try {
 }
 
 if (mode === 'book') {
+  const squashLine = !openings ? ''
+    : openings.length
+      ? `\n\nOpen squash court times on ${date}: ${openings.map(o => `${emsTime(o.start)}–${emsTime(o.end)}`).join(', ')} Mountain time.`
+      : `\n\nThe squash court has no open hour left on ${date}.`;
   const body = error
     ? `CU court reservation could not be completed for ${date} at ${startTime} Mountain time. Check the GitHub Actions run for details. Error: ${error.message}`
     : result?.submitted
       ? `CU ${result.sport === 'badminton' ? `badminton court ${result.badmintonRoom}` : 'squash'} reservation confirmed for ${date}, ${startTime}–${endTime(startTime)} Mountain time.\n\n${result.confirmation}`
       : `CU court reservation for ${date} was already recorded. No duplicate was submitted.`;
+  const text = body + squashLine;
   if (!mail) {
     console.error('Booking email unavailable: GMAIL_USER and GMAIL_APP_PASSWORD are required');
     process.exitCode = 1;
@@ -118,7 +132,7 @@ if (mode === 'book') {
         from: process.env.GMAIL_USER,
         to: contact.email,
         subject: error ? `CU court reservation failed: ${date}` : `CU court reservation: ${date}`,
-        text: body
+        text
       });
     } catch (mailError) {
       console.error(`Booking email failed: ${mailError.message}`);
