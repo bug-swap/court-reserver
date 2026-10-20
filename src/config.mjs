@@ -42,3 +42,11 @@ export function requestedRoom(value = 'any') {
   if (!['any', '3A', '3B', '3C'].includes(value)) throw new Error('Badminton room must be any, 3A, 3B, or 3C');
   return value;
 }
+
+// Matches EMS's "New Booking for Tue Oct 20, 2026" heading for a YYYY-MM-DD date.
+export function emsHeadingDate(date) {
+  const [year, month, day] = date.split('-').map(Number);
+  const value = new Date(Date.UTC(year, month - 1, day, 12));
+  const part = options => value.toLocaleDateString('en-US', { timeZone: 'UTC', ...options });
+  return `${part({ weekday: 'short' })} ${part({ month: 'short' })} ${day}, ${year}`;
+}

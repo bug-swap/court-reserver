@@ -1,4 +1,4 @@
-import { COURT_URL, EMS_URL, emsTime, endTime } from './config.mjs';
+import { COURT_URL, EMS_URL, emsHeadingDate, emsTime, endTime } from './config.mjs';
 
 export function courtCandidates(sport, badmintonRoom) {
   if (sport === 'squash') {
@@ -36,6 +36,7 @@ async function fillField(page, label, value, selectors = []) {
     ...selectors.map(selector => page.locator(selector))
   ], String(label));
   await input.fill(value);
+  return input;
 }
 
 async function closeTimePicker(page) {
@@ -84,7 +85,8 @@ async function chooseDateAndTime(page, date, startTime) {
   const dateUS = `${month}/${day}/${year}`;
   const start = emsTime(startTime);
   const end = emsTime(endTime(startTime));
-  await fillField(page, /Date Required/i, dateUS, ['input[name*="date" i]', 'input[id*="date" i]']);
+  // The date picker only commits typed text on blur; clicking the time picker alone leaves today's date.
+  await (await fillField(page, /Date Required/i, dateUS, ['input[name*="date" i]', 'input[id*="date" i]'])).press('Tab');
   const startControl = await firstVisible([
     page.locator('[aria-label*="Edit booking start time" i], [title*="Edit booking start time" i]'),
     page.getByText('Start Time', { exact: true }).locator('xpath=..')
@@ -101,6 +103,11 @@ async function chooseDateAndTime(page, date, startTime) {
   await closeTimePicker(page);
   if (await page.getByText(/Date must be prior|Start Time in the past/i).first().isVisible().catch(() => false)) {
     throw new Error('EMS rejected the selected date or time before searching');
+  }
+  // EMS silently keeps today when the typed date is not accepted; never book the wrong day.
+  const heading = (await page.getByText(/New Booking for/i).first().locator('xpath=..').innerText()).replace(/\s+/g, ' ').trim();
+  if (!heading.includes(emsHeadingDate(date))) {
+    throw new Error(`EMS kept "${heading}" instead of ${emsHeadingDate(date)}`);
   }
   await (await firstVisible([
     page.getByRole('button', { name: /^search$/i }),
