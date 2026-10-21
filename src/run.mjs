@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import nodemailer from 'nodemailer';
 import { bookCourt, findAvailability, findSquashOpenings, keepAlive, readReservations } from './booking.mjs';
 import { decryptState, encryptState } from './crypto.mjs';
-import { denverParts, emsTime, endTime, requestedDate, requestedFallback, requestedRoom, requestedSport, requestedTime } from './config.mjs';
+import { TIME_ZONE, denverParts, emsTime, endTime, requestedDate, requestedFallback, requestedRoom, requestedSport, requestedTime } from './config.mjs';
 import { hasBooking, loadCanvasSession, loadSession, loadSettings, logRun, saveAvailability, saveBooking, saveReservations, saveSession, saveSettings } from './supabase.mjs';
 import { captureBrowserState, restoreSessionStorage, withSsoCookies } from './browser-state.mjs';
 
@@ -47,7 +47,11 @@ const canvasSession = await loadCanvasSession().catch(caught => {
   console.error(`Shared CU SSO cookies unavailable: ${caught.message}`);
   return { cookies: [] };
 });
-const context = await browser.newContext({ storageState: withSsoCookies(state.browserState, canvasSession.cookies) });
+// EMS judges "today" and "in the past" by the browser's clock; GitHub runners are on UTC, a day ahead of Denver each evening.
+const context = await browser.newContext({
+  storageState: withSsoCookies(state.browserState, canvasSession.cookies),
+  timezoneId: TIME_ZONE
+});
 await restoreSessionStorage(context, state.sessionStorage);
 const page = await context.newPage();
 async function refreshAvailability() {
