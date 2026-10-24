@@ -21,6 +21,13 @@ export function courtCandidates(sport, badmintonRoom, squashFallback = 'none') {
   }));
 }
 
+export function ensureSelectedBookingDate(heading, date) {
+  const expected = emsHeadingDate(date);
+  if (!heading.includes(expected)) {
+    throw new Error(`EMS kept "${heading}" instead of ${expected}`);
+  }
+}
+
 async function firstVisible(candidates, description) {
   for (const locator of candidates) {
     const first = locator.first();
@@ -102,14 +109,9 @@ async function chooseDateAndTime(page, date, startTime) {
   await endControl.click();
   await fillField(page, /EndTime Required/i, end, ['input[name*="EndTime" i]', 'input[id*="EndTime" i]']);
   await closeTimePicker(page);
-  if (await page.getByText(/Date must be prior|Start Time in the past/i).first().isVisible().catch(() => false)) {
-    throw new Error('EMS rejected the selected date or time before searching');
-  }
   // EMS silently keeps today when the typed date is not accepted; never book the wrong day.
   const heading = (await page.getByText(/New Booking for/i).first().locator('xpath=..').innerText()).replace(/\s+/g, ' ').trim();
-  if (!heading.includes(emsHeadingDate(date))) {
-    throw new Error(`EMS kept "${heading}" instead of ${emsHeadingDate(date)}`);
-  }
+  ensureSelectedBookingDate(heading, date);
   await (await firstVisible([
     page.getByRole('button', { name: /^search$/i }),
     page.locator('button:has-text("Search")')

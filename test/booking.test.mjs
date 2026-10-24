@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { courtCandidates, nearestSquashStart } from '../src/booking.mjs';
+import { courtCandidates, ensureSelectedBookingDate, nearestSquashStart } from '../src/booking.mjs';
 import { clipOpenings, squashOpenings } from '../src/availability.mjs';
 
 test('squash books nothing else unless a badminton fallback is chosen', () => {
@@ -48,4 +48,12 @@ test('openings for today start no earlier than the next 15-minute step', () => {
   assert.deepEqual(clipOpenings(openings), openings);
   assert.deepEqual(clipOpenings(openings, '17:20'), [{ start: '17:30', end: '20:00', lastStart: '18:45' }]);
   assert.deepEqual(clipOpenings(openings, '18:50'), []);
+});
+
+test('booking date validation relies on heading mismatch, not transient form text', () => {
+  assert.doesNotThrow(() => ensureSelectedBookingDate('New Booking for Sat Oct 24, 2026', '2026-10-24'));
+  assert.throws(
+    () => ensureSelectedBookingDate('New Booking for Thu Oct 23, 2026', '2026-10-24'),
+    /instead of Sat Oct 24, 2026/
+  );
 });
